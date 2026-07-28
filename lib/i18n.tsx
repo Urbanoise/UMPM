@@ -29,7 +29,6 @@ const STRINGS = {
   themeLabel: { ka: "თემა", en: "Theme" },
   themeLight: { ka: "ნათელი", en: "Light" },
   themeDark: { ka: "მუქი", en: "Dark" },
-  themeSystem: { ka: "სისტემის მიხედვით", en: "Match system" },
 
   dragReorder: {
     ka: "გადაათრიეთ პროექტის გადასაადგილებლად",

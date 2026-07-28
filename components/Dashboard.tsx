@@ -50,19 +50,17 @@ function LangToggle() {
 
 function ThemeToggle() {
   const { t } = useLang();
-  const { theme, resolved, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   // Mirror the preference onto <html data-theme>, which is what globals.css
-  // selects on. Depending on `resolved` (not `theme`) means "match system"
-  // also repaints when the OS flips light/dark while the tab is open.
+  // selects on.
   useEffect(() => {
-    applyTheme(resolved);
-  }, [resolved]);
+    applyTheme(theme);
+  }, [theme]);
 
   const opts: { value: Theme; glyph: string; label: StrKey }[] = [
     { value: "light", glyph: "☀︎", label: "themeLight" },
     { value: "dark", glyph: "☾︎", label: "themeDark" },
-    { value: "system", glyph: "◐", label: "themeSystem" },
   ];
   return (
     <div

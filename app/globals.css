@@ -36,10 +36,10 @@
   --cal-task: #0b8f57; /* task deadlines — STS green dot */
 }
 
-/* The theme toggle writes light/dark onto <html data-theme>, resolving "system"
-   against prefers-color-scheme in JS (see lib/theme.ts and the inline script in
-   app/layout.tsx), so the palette below is selected by attribute, not by media
-   query — an explicit choice has to beat the OS setting in both directions. */
+/* The theme toggle writes light/dark onto <html data-theme> (see lib/theme.ts
+   and the inline script in app/layout.tsx), so the palette below is selected by
+   attribute rather than by a prefers-color-scheme query: the choice is the
+   user's, and light is the default until they pick dark. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --page: #16181c;

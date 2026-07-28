@@ -1,0 +1,190 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  /* STS brand — primary #db4536 #f2a50a #099c57 · secondary #24272d #434751 */
+  --sts-red: #db4536;
+  --sts-amber: #f2a50a;
+  --sts-green: #099c57;
+  --sts-ink: #24272d;
+  --sts-ink-2: #434751;
+
+  --page: #f8f8f6;
+  --surface-1: #ffffff;
+  --text-primary: #24272d;
+  --text-secondary: #434751;
+  --text-muted: #8a8d93;
+  --gridline: #e4e3de;
+  --baseline: #c6c5bd;
+  --border: rgba(36, 39, 45, 0.11);
+  --accent: #db4536;
+  --accent-strong: #c23829;
+  --meter-track: #f6d8d3;
+  --series-0: #db4536;
+  --series-1: #099c57;
+  --series-2: #f2a50a;
+  --series-3: #434751;
+  --series-4: #2a78d6;
+  --series-5: #7d4fc0;
+  --series-6: #e87ba4;
+  --series-7: #0f9bab;
+  --status-good: #099c57;
+  --status-warning: #f2a50a;
+  --status-serious: #e0761c;
+  --status-critical: #db4536;
+  --cal-milestone: #d1890a; /* deliverables — STS amber diamond */
+  --cal-task: #0b8f57; /* task deadlines — STS green dot */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #16181c;
+    --surface-1: #212429;
+    --text-primary: #f4f4f2;
+    --text-secondary: #c3c4c8;
+    --text-muted: #8a8d93;
+    --gridline: #33363c;
+    --baseline: #444852;
+    --border: rgba(255, 255, 255, 0.11);
+    --accent: #ec5c4d;
+    --accent-strong: #f37568;
+    --meter-track: #5a2721;
+    --series-0: #ec5c4d;
+    --series-1: #17b46c;
+    --series-2: #f5b32e;
+    --series-3: #9a9ea8;
+    --series-4: #4d94ec;
+    --series-5: #a684e0;
+    --series-6: #ef94b6;
+    --series-7: #33b7c7;
+    --status-good: #17b46c;
+    --status-warning: #f5b32e;
+    --status-serious: #ee8b3e;
+    --status-critical: #ec5c4d;
+    --cal-milestone: #f0ad3c; /* deliverables — STS amber diamond */
+    --cal-task: #17b46c; /* task deadlines — STS green dot */
+  }
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface-1);
+  --color-ink: var(--text-primary);
+  --color-ink-2: var(--text-secondary);
+  --color-ink-3: var(--text-muted);
+  --color-grid: var(--gridline);
+  --color-edge: var(--border);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-noto-sans), var(--font-noto-sans-georgian);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: var(--font-noto-sans), var(--font-noto-sans-georgian), system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+input,
+select,
+textarea {
+  background: var(--surface-1);
+  border: 1px solid var(--baseline);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.btn {
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+.btn:hover {
+  border-color: var(--baseline);
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+.btn-primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+.btn-danger:hover {
+  color: var(--status-critical);
+  border-color: var(--status-critical);
+}
+
+/* STS brand lockup — theme-aware SVG-free logo mark */
+.sts-logo {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1;
+  user-select: none;
+}
+.sts-wordmark {
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  color: var(--sts-ink);
+}
+@media (prefers-color-scheme: dark) {
+  .sts-wordmark {
+    color: var(--text-primary);
+  }
+}
+.sts-bar {
+  display: flex;
+  height: 4px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 2px;
+}
+.sts-bar > i {
+  display: block;
+  height: 100%;
+}
+.sts-tagline {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* thin brand rule across the top of the app */
+.sts-topbar {
+  display: flex;
+  height: 3px;
+  width: 100%;
+}
+.sts-topbar > i {
+  display: block;
+  height: 100%;
+}

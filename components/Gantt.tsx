@@ -187,6 +187,20 @@ export default function Gantt({
   }, [t0, t1, locale]);
   const labelStep = Math.max(1, Math.ceil(weeks.length / 14));
 
+  // first-of-month boundaries — the primary vertical rhythm
+  const months = useMemo(() => {
+    const out: number[] = [];
+    const d = new Date(t0);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(1);
+    if (d.getTime() < t0) d.setMonth(d.getMonth() + 1);
+    while (d.getTime() <= t1) {
+      out.push(d.getTime());
+      d.setMonth(d.getMonth() + 1);
+    }
+    return out;
+  }, [t0, t1]);
+
   function showTip(evt: React.PointerEvent | React.FocusEvent, body: ReactNode) {
     const wrap = wrapRef.current;
     if (!wrap) return;
@@ -295,7 +309,37 @@ export default function Gantt({
   return (
     <div ref={wrapRef} className="relative">
       <svg width={width} height={height} role="img" aria-label="Project timelines">
-        {/* weekly (Monday) gridlines + labels */}
+        {/* zebra row bands — give each project row a surface to sit on */}
+        {rows.map(({ p, yTop, h }, i) =>
+          i % 2 === 1 ? (
+            <rect
+              key={`zebra-${p.id}`}
+              x={0}
+              y={yTop}
+              width={width}
+              height={h}
+              fill="var(--gridline)"
+              opacity={0.22}
+            />
+          ) : null
+        )}
+
+        {/* thin horizontal separators between project rows */}
+        {rows.map(({ p, yTop }, i) =>
+          i > 0 ? (
+            <line
+              key={`sep-${p.id}`}
+              x1={0}
+              x2={width}
+              y1={yTop}
+              y2={yTop}
+              stroke="var(--gridline)"
+              strokeWidth={1}
+            />
+          ) : null
+        )}
+
+        {/* faint weekly ticks + labels */}
         {weeks.map((m, i) => (
           <g key={m.t}>
             <line
@@ -305,6 +349,7 @@ export default function Gantt({
               y2={height - 6}
               stroke="var(--gridline)"
               strokeWidth={1}
+              opacity={0.45}
             />
             {i % labelStep === 0 && (
               <text
@@ -318,6 +363,29 @@ export default function Gantt({
             )}
           </g>
         ))}
+
+        {/* month boundaries — the primary vertical rhythm */}
+        {months.map((mt) => (
+          <line
+            key={`month-${mt}`}
+            x1={x(mt)}
+            x2={x(mt)}
+            y1={TOP - 8}
+            y2={height - 6}
+            stroke="var(--baseline)"
+            strokeWidth={1}
+          />
+        ))}
+
+        {/* separator under the label gutter */}
+        <line
+          x1={GUTTER}
+          x2={GUTTER}
+          y1={TOP - 8}
+          y2={height - 6}
+          stroke="var(--baseline)"
+          strokeWidth={1}
+        />
         {/* axis baseline */}
         <line
           x1={GUTTER}
@@ -368,9 +436,9 @@ export default function Gantt({
                 />
               )}
               <text
-                x={GUTTER - 12}
+                x={16}
                 y={yMid + 4}
-                textAnchor="end"
+                textAnchor="start"
                 fontSize={13}
                 fontWeight={selected ? 600 : 400}
                 fill="var(--text-primary)"
@@ -523,9 +591,9 @@ export default function Gantt({
                 return (
                   <g key={`task-${task.id}`}>
                     <text
-                      x={GUTTER - 12}
+                      x={28}
                       y={tMid + 3.5}
-                      textAnchor="end"
+                      textAnchor="start"
                       fontSize={11.5}
                       fill="var(--text-secondary)"
                     >
@@ -610,9 +678,9 @@ export default function Gantt({
                   </>
                 )}
                 <text
-                  x={GUTTER - 12}
+                  x={16}
                   y={drag.y + 4}
-                  textAnchor="end"
+                  textAnchor="start"
                   fontSize={13}
                   fontWeight={600}
                   fill="var(--accent)"

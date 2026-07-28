@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "პროექტების განრიგი — Project Timelines",
+  title: "პროექტების მართვა — Project Management",
   description: "Dashboard of all project timelines, deliverables and tasks",
 };
 
@@ -30,8 +30,20 @@ export default function RootLayout({
   return (
     <html
       lang="ka"
+      data-theme="light"
+      suppressHydrationWarning
       className={`${notoSans.variable} ${notoSansGeorgian.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Runs while the HTML is still parsing, before anything is painted, so
+            a dark-theme user never sees a flash of the light palette. Kept in
+            sync with lib/theme.ts — same storage key, same resolution rule. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("theme");var d=t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.dataset.theme=d?"dark":"light"}catch(e){}})()`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <div className="sts-topbar" aria-hidden>
           <i style={{ background: "#db4536", flexGrow: 20 }} />

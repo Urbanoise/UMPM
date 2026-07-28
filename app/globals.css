@@ -36,35 +36,37 @@
   --cal-task: #0b8f57; /* task deadlines — STS green dot */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --page: #16181c;
-    --surface-1: #212429;
-    --text-primary: #f4f4f2;
-    --text-secondary: #c3c4c8;
-    --text-muted: #8a8d93;
-    --gridline: #33363c;
-    --baseline: #444852;
-    --border: rgba(255, 255, 255, 0.11);
-    --accent: #ec5c4d;
-    --accent-strong: #f37568;
-    --meter-track: #5a2721;
-    --series-0: #ec5c4d;
-    --series-1: #17b46c;
-    --series-2: #f5b32e;
-    --series-3: #9a9ea8;
-    --series-4: #4d94ec;
-    --series-5: #a684e0;
-    --series-6: #ef94b6;
-    --series-7: #33b7c7;
-    --status-good: #17b46c;
-    --status-warning: #f5b32e;
-    --status-serious: #ee8b3e;
-    --status-critical: #ec5c4d;
-    --cal-milestone: #f0ad3c; /* deliverables — STS amber diamond */
-    --cal-task: #17b46c; /* task deadlines — STS green dot */
-  }
+/* The theme toggle writes light/dark onto <html data-theme>, resolving "system"
+   against prefers-color-scheme in JS (see lib/theme.ts and the inline script in
+   app/layout.tsx), so the palette below is selected by attribute, not by media
+   query — an explicit choice has to beat the OS setting in both directions. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #16181c;
+  --surface-1: #212429;
+  --text-primary: #f4f4f2;
+  --text-secondary: #c3c4c8;
+  --text-muted: #8a8d93;
+  --gridline: #33363c;
+  --baseline: #444852;
+  --border: rgba(255, 255, 255, 0.11);
+  --accent: #ec5c4d;
+  --accent-strong: #f37568;
+  --meter-track: #5a2721;
+  --series-0: #ec5c4d;
+  --series-1: #17b46c;
+  --series-2: #f5b32e;
+  --series-3: #9a9ea8;
+  --series-4: #4d94ec;
+  --series-5: #a684e0;
+  --series-6: #ef94b6;
+  --series-7: #33b7c7;
+  --status-good: #17b46c;
+  --status-warning: #f5b32e;
+  --status-serious: #ee8b3e;
+  --status-critical: #ec5c4d;
+  --cal-milestone: #f0ad3c; /* deliverables — STS amber diamond */
+  --cal-task: #17b46c; /* task deadlines — STS green dot */
 }
 
 @theme inline {
@@ -153,10 +155,8 @@ button:focus-visible {
   letter-spacing: -0.02em;
   color: var(--sts-ink);
 }
-@media (prefers-color-scheme: dark) {
-  .sts-wordmark {
-    color: var(--text-primary);
-  }
+:root[data-theme="dark"] .sts-wordmark {
+  color: var(--text-primary);
 }
 .sts-bar {
   display: flex;

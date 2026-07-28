@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Project, Task } from "@/lib/types";
-import { useLang, type Lang } from "@/lib/i18n";
+import { useLang, type Lang, type StrKey } from "@/lib/i18n";
+import { applyTheme, useTheme, type Theme } from "@/lib/theme";
 import { splitAssignees } from "@/lib/assignees";
 import Gantt from "./Gantt";
 import StatTiles from "./StatTiles";
@@ -41,6 +42,49 @@ function LangToggle() {
           }
         >
           {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ThemeToggle() {
+  const { t } = useLang();
+  const { theme, resolved, setTheme } = useTheme();
+
+  // Mirror the preference onto <html data-theme>, which is what globals.css
+  // selects on. Depending on `resolved` (not `theme`) means "match system"
+  // also repaints when the OS flips light/dark while the tab is open.
+  useEffect(() => {
+    applyTheme(resolved);
+  }, [resolved]);
+
+  const opts: { value: Theme; glyph: string; label: StrKey }[] = [
+    { value: "light", glyph: "☀︎", label: "themeLight" },
+    { value: "dark", glyph: "☾︎", label: "themeDark" },
+    { value: "system", glyph: "◐", label: "themeSystem" },
+  ];
+  return (
+    <div
+      className="flex overflow-hidden rounded-lg border border-edge text-[13px]"
+      role="group"
+      aria-label={t("themeLabel")}
+    >
+      {opts.map((o) => (
+        <button
+          key={o.value}
+          onClick={() => setTheme(o.value)}
+          aria-pressed={theme === o.value}
+          aria-label={t(o.label)}
+          title={t(o.label)}
+          className="px-2.5 py-1 leading-5 font-medium"
+          style={
+            theme === o.value
+              ? { background: "var(--accent)", color: "#ffffff" }
+              : { color: "var(--text-secondary)" }
+          }
+        >
+          {o.glyph}
         </button>
       ))}
     </div>
@@ -123,6 +167,7 @@ export default function Dashboard() {
           </h1>
         </div>
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           <LangToggle />
           <button className="btn btn-primary" onClick={() => setModal("create")}>
             {t("newProject")}

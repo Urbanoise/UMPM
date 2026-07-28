@@ -5,7 +5,7 @@ import { useCallback, useSyncExternalStore } from "react";
 export type Lang = "ka" | "en";
 
 const STRINGS = {
-  appTitle: { ka: "პროექტების განრიგი", en: "Project timelines" },
+  appTitle: { ka: "პროექტების მართვა", en: "Project Management" },
   newProject: { ka: "+ ახალი პროექტი", en: "+ New project" },
   loading: { ka: "იტვირთება…", en: "Loading…" },
 
@@ -25,6 +25,11 @@ const STRINGS = {
     ka: "დააწკაპუნეთ პროექტზე განრიგში, რომ მისი თასქები გამოჩნდეს განრიგზე და შეცვალოთ ჩასაბარებელი დოკუმენტები, თასქები და პასუხისმგებელი პირები.",
     en: "Click a project on the timeline to expand its tasks on the chart and edit its deliverables, tasks and responsible people.",
   },
+
+  themeLabel: { ka: "თემა", en: "Theme" },
+  themeLight: { ka: "ნათელი", en: "Light" },
+  themeDark: { ka: "მუქი", en: "Dark" },
+  themeSystem: { ka: "სისტემის მიხედვით", en: "Match system" },
 
   dragReorder: {
     ka: "გადაათრიეთ პროექტის გადასაადგილებლად",

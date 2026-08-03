@@ -4,6 +4,7 @@ import { ReactNode, useMemo, useRef, useState } from "react";
 import type { Project } from "@/lib/types";
 import { fmtMonthYear, todayStr, weekdayInitials } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
+import { deliverableNames } from "@/lib/linked";
 
 function typeColor(kind: "milestone" | "task") {
   return kind === "milestone" ? "var(--cal-milestone)" : "var(--cal-task)";
@@ -64,8 +65,12 @@ export default function MilestoneCalendar({
           project: p,
         });
       }
+      // A task that also exists as a deliverable is drawn once, as the
+      // deliverable — otherwise every linked pair would mark the day twice.
+      const linked = deliverableNames(p);
       for (const task of p.tasks) {
         if (!task.end_date) continue; // no deadline set
+        if (linked.has(task.name)) continue;
         push({
           key: `t${task.id}`,
           kind: "task",

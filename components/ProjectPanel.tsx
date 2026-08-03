@@ -74,6 +74,31 @@ export default function ProjectPanel({
     setSel({ projectId: p.id, ids, bulkOpen });
   }
 
+  // outcome of the last copy-to-deliverables run, shown next to the button
+  const [copying, setCopying] = useState(false);
+  const [copyResult, setCopyResult] = useState<string | null>(null);
+
+  async function copyToDeliverables(ids: number[]) {
+    setCopying(true);
+    setCopyResult(null);
+    const res = await fetch("/api/tasks/copy-to-deliverables", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    setCopying(false);
+    if (!res.ok) {
+      setCopyResult(t("errSave"));
+      return;
+    }
+    const { created, skipped } = await res.json();
+    setCopyResult(
+      t("copyResult", { created: String(created), skipped: String(skipped) })
+    );
+    setSelection(EMPTY_IDS);
+    onChanged();
+  }
+
   // Ignore ids of tasks that have since been deleted elsewhere.
   const selectedTasks = p.tasks.filter((task) => selectedIds.has(task.id));
   const allSelected =
@@ -288,7 +313,17 @@ export default function ProjectPanel({
               </span>
               <button
                 type="button"
-                className="btn btn-primary ml-auto py-1 text-[13px]"
+                className="btn ml-auto py-1 text-[13px]"
+                disabled={copying}
+                onClick={() =>
+                  copyToDeliverables(selectedTasks.map((task) => task.id))
+                }
+              >
+                {copying ? t("copying") : t("copyToDeliverables")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary py-1 text-[13px]"
                 onClick={() => setSelection(selectedIds, true)}
               >
                 {t("bulkEdit")}
@@ -301,6 +336,10 @@ export default function ProjectPanel({
                 {t("clearSelection")}
               </button>
             </div>
+          )}
+
+          {copyResult && (
+            <p className="mt-2 px-2 text-[13px] text-ink-2">{copyResult}</p>
           )}
 
           <ul className="mt-2 space-y-1">

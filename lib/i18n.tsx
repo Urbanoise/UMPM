@@ -133,6 +133,15 @@ const STRINGS = {
   nSelected: { ka: "მონიშნულია {n}", en: "{n} selected" },
   bulkEdit: { ka: "მონიშნულების რედაქტირება", en: "Edit selected" },
   clearSelection: { ka: "მონიშვნის მოხსნა", en: "Clear selection" },
+  copyToDeliverables: {
+    ka: "ჩასაბარებელ დოკუმენტებში კოპირება",
+    en: "Copy to deliverables",
+  },
+  copying: { ka: "კოპირდება…", en: "Copying…" },
+  copyResult: {
+    ka: "შეიქმნა {created}, გამოტოვებულია {skipped}",
+    en: "{created} created, {skipped} skipped",
+  },
   formTitleBulkEdit: {
     ka: "მონიშნული თასქების რედაქტირება",
     en: "Edit selected tasks",

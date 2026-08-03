@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { syncTaskFromDeliverable } from "@/lib/queries";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -21,6 +22,10 @@ export async function PATCH(req: Request, { params }: Params) {
     ...values,
     id,
   ]);
+  // A rename can link the deliverable to a different task, so re-sync on that too.
+  if (fields.due_date !== undefined || fields.name !== undefined) {
+    await syncTaskFromDeliverable(id);
+  }
   return NextResponse.json({ ok: true });
 }
 

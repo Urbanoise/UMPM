@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { syncDeliverablesFromTasks } from "@/lib/queries";
 
 // Bulk edit: apply the same start date, end date and/or assignee to several
 // tasks at once. Body is { ids: number[], start_date?, end_date?, assignee? }.
@@ -50,5 +51,8 @@ export async function PATCH(req: Request) {
     `UPDATE tasks SET ${set} WHERE id IN (${idPlaceholders}) RETURNING id`,
     [...values, ...ids]
   );
+  if (fields.end_date !== undefined) {
+    await syncDeliverablesFromTasks(rows.map((r) => r.id));
+  }
   return NextResponse.json({ ok: true, updated: rows.length });
 }

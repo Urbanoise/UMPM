@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { Project, Task } from "@/lib/types";
 import { addDays, fmtShortDate, parseDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
+import { deliverableNames } from "@/lib/linked";
 
 const HORIZON_DAYS = 42;
 const COLLAPSED_COUNT = 12;
@@ -75,8 +76,13 @@ export default function Deadlines({
         }
       }
       if (p.status === "done") continue;
+      // A task that also exists as a deliverable is listed once, as the
+      // deliverable — which also means the deliverable's done tick is what
+      // decides whether the pair still counts as a deadline.
+      const linked = deliverableNames(p);
       for (const task of p.tasks) {
         if (task.status === "done" || !task.end_date) continue;
+        if (linked.has(task.name)) continue;
         if (task.end_date <= horizon) {
           items.push({
             key: `t${task.id}`,

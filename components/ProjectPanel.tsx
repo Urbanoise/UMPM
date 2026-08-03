@@ -8,6 +8,10 @@ import { fmtDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
 import { normalizeAssignees } from "@/lib/assignees";
 import ComboBox from "./ComboBox";
+import BulkTaskModal from "./BulkTaskModal";
+
+// Shared empty selection, so "nothing selected" keeps a stable identity.
+const EMPTY_IDS: Set<number> = new Set();
 
 const STATUS_META: Record<string, { icon: string; color: string }> = {
   planned: { icon: "○", color: "var(--text-muted)" },
@@ -54,6 +58,33 @@ export default function ProjectPanel({
   const [tAssignee, setTAssignee] = useState("");
   const [tStart, setTStart] = useState("");
   const [tEnd, setTEnd] = useState("");
+  // Bulk task selection. The panel is reused when another project is picked,
+  // so the selection carries the project it belongs to and is read as empty
+  // once that no longer matches — no reset effect needed.
+  const [sel, setSel] = useState<{
+    projectId: number;
+    ids: Set<number>;
+    bulkOpen: boolean;
+  }>({ projectId: p.id, ids: EMPTY_IDS, bulkOpen: false });
+  const current = sel.projectId === p.id ? sel : null;
+  const selectedIds = current?.ids ?? EMPTY_IDS;
+  const bulkOpen = current?.bulkOpen ?? false;
+
+  function setSelection(ids: Set<number>, bulkOpen = false) {
+    setSel({ projectId: p.id, ids, bulkOpen });
+  }
+
+  // Ignore ids of tasks that have since been deleted elsewhere.
+  const selectedTasks = p.tasks.filter((task) => selectedIds.has(task.id));
+  const allSelected =
+    p.tasks.length > 0 && selectedTasks.length === p.tasks.length;
+
+  function toggleTask(id: number, on: boolean) {
+    const next = new Set(selectedIds);
+    if (on) next.add(id);
+    else next.delete(id);
+    setSelection(next, bulkOpen);
+  }
 
   async function addMilestone(e: React.FormEvent) {
     e.preventDefault();
@@ -227,9 +258,51 @@ export default function ProjectPanel({
 
         {/* tasks */}
         <section>
-          <h3 className="text-sm font-semibold tracking-wide text-ink-2">
-            {t("tasks")}
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold tracking-wide text-ink-2">
+              {t("tasks")}
+            </h3>
+            {p.tasks.length > 0 && (
+              <label className="flex items-center gap-2 text-[13px] text-ink-3">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={(e) =>
+                    setSelection(
+                      e.target.checked
+                        ? new Set(p.tasks.map((task) => task.id))
+                        : EMPTY_IDS,
+                      bulkOpen
+                    )
+                  }
+                />
+                {t("selectAllTasks")}
+              </label>
+            )}
+          </div>
+
+          {selectedTasks.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-edge px-2 py-1.5">
+              <span className="text-[13px] font-medium">
+                {t("nSelected", { n: String(selectedTasks.length) })}
+              </span>
+              <button
+                type="button"
+                className="btn btn-primary ml-auto py-1 text-[13px]"
+                onClick={() => setSelection(selectedIds, true)}
+              >
+                {t("bulkEdit")}
+              </button>
+              <button
+                type="button"
+                className="btn py-1 text-[13px]"
+                onClick={() => setSelection(EMPTY_IDS)}
+              >
+                {t("clearSelection")}
+              </button>
+            </div>
+          )}
+
           <ul className="mt-2 space-y-1">
             {p.tasks.map((task) => {
               const overdue =
@@ -239,6 +312,12 @@ export default function ProjectPanel({
                   key={task.id}
                   className="group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-[var(--gridline)]/40"
                 >
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(task.id)}
+                    aria-label={`${t("selectTask")} ${task.name}`}
+                    onChange={(e) => toggleTask(task.id, e.target.checked)}
+                  />
                   <select
                     className="px-1.5 py-0.5 text-[12px]"
                     value={task.status}
@@ -344,6 +423,18 @@ export default function ProjectPanel({
           </form>
         </section>
       </div>
+
+      {bulkOpen && selectedTasks.length > 0 && (
+        <BulkTaskModal
+          tasks={selectedTasks}
+          people={people}
+          onClose={() => setSelection(selectedIds)}
+          onSaved={() => {
+            setSelection(EMPTY_IDS);
+            onChanged();
+          }}
+        />
+      )}
     </div>
   );
 }

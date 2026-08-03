@@ -128,6 +128,29 @@ const STRINGS = {
     en: "Task name is required.",
   },
 
+  selectTask: { ka: "მონიშნეთ თასქი:", en: "Select task:" },
+  selectAllTasks: { ka: "ყველას მონიშვნა", en: "Select all" },
+  nSelected: { ka: "მონიშნულია {n}", en: "{n} selected" },
+  bulkEdit: { ka: "მონიშნულების რედაქტირება", en: "Edit selected" },
+  clearSelection: { ka: "მონიშვნის მოხსნა", en: "Clear selection" },
+  formTitleBulkEdit: {
+    ka: "მონიშნული თასქების რედაქტირება",
+    en: "Edit selected tasks",
+  },
+  bulkHint: {
+    ka: "მონიშნეთ ველები, რომელთა შეცვლაც გსურთ ყველა არჩეულ თასქზე. მონიშნული, მაგრამ ცარიელი ველი წაშლის არსებულ მნიშვნელობას.",
+    en: "Tick the fields you want to change on every selected task. A ticked but empty field clears that value.",
+  },
+  bulkApply: { ka: "გამოყენება {n} თასქზე", en: "Apply to {n} tasks" },
+  errBulkNoField: {
+    ka: "მონიშნეთ სულ მცირე ერთი ველი.",
+    en: "Tick at least one field to change.",
+  },
+  warnInverted: {
+    ka: "{n} თასქს დასრულების თარიღი დაწყებაზე ადრე დარჩება.",
+    en: "{n} task(s) would end up with an end date before their start date.",
+  },
+
   formTitleNew: { ka: "ახალი პროექტი", en: "New project" },
   formTitleEdit: { ka: "პროექტის რედაქტირება", en: "Edit project" },
   fieldName: { ka: "პროექტის სახელი", en: "Project name" },

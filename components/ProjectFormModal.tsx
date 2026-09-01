@@ -9,17 +9,19 @@ import { useLang } from "@/lib/i18n";
 export default function ProjectFormModal({
   initial,
   people,
+  onUploadContract,
   onClose,
   onSaved,
 }: {
   initial: Project | null;
   people: string[];
+  /** Offered above the form when creating; omitted when editing. */
+  onUploadContract?: () => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = useLang();
   const [name, setName] = useState(initial?.name ?? "");
-  const [description, setDescription] = useState(initial?.description ?? "");
   const [startDate, setStartDate] = useState(initial?.start_date ?? todayStr());
   const [endDate, setEndDate] = useState(initial?.end_date ?? "");
   const [status, setStatus] = useState<ProjectStatus>(initial?.status ?? "planned");
@@ -42,7 +44,6 @@ export default function ProjectFormModal({
     setSaving(true);
     const payload = {
       name,
-      description,
       start_date: startDate,
       end_date: endDate,
       status,
@@ -82,6 +83,19 @@ export default function ProjectFormModal({
           {initial ? t("formTitleEdit") : t("formTitleNew")}
         </h2>
 
+        {onUploadContract && (
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 rounded-lg border border-dashed border-edge px-3 py-2.5 text-sm">
+            <span className="text-ink-3">{t("contractPrompt")}</span>
+            <button
+              type="button"
+              className="btn py-1"
+              onClick={onUploadContract}
+            >
+              {t("uploadContract")}
+            </button>
+          </div>
+        )}
+
         <label className="mt-4 block text-sm">
           <span className="text-ink-2">{t("fieldName")}</span>
           <input
@@ -89,16 +103,6 @@ export default function ProjectFormModal({
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
-          />
-        </label>
-
-        <label className="mt-3 block text-sm">
-          <span className="text-ink-2">{t("fieldDescription")}</span>
-          <textarea
-            className="mt-1 w-full"
-            rows={2}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
           />
         </label>
 

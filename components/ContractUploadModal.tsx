@@ -214,16 +214,6 @@ export default function ContractUploadModal({
               />
             </label>
 
-            <label className="block text-sm">
-              <span className="text-ink-2">{t("fieldDescription")}</span>
-              <textarea
-                className="mt-1 w-full"
-                rows={2}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </label>
-
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-sm">
                 <span className="text-ink-2">{t("fieldStart")}</span>

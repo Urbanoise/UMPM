@@ -166,10 +166,6 @@ const STRINGS = {
   formTitleNew: { ka: "ახალი პროექტი", en: "New project" },
   formTitleEdit: { ka: "პროექტის რედაქტირება", en: "Edit project" },
   fieldName: { ka: "პროექტის სახელი", en: "Project name" },
-  fieldDescription: {
-    ka: "აღწერა (არასავალდებულო)",
-    en: "Description (optional)",
-  },
   fieldStart: { ka: "დაწყების თარიღი", en: "Start date" },
   fieldEnd: { ka: "დასრულების თარიღი", en: "End date" },
   fieldStatus: { ka: "სტატუსი", en: "Status" },
@@ -200,6 +196,10 @@ const STRINGS = {
     en: "Something went wrong saving the project.",
   },
 
+  contractPrompt: {
+    ka: "გაქვთ ხელმოწერილი ხელშეკრულება?",
+    en: "Have a signed contract?",
+  },
   uploadContract: { ka: "ხელშეკრულების ატვირთვა", en: "Upload contract" },
   contractTitle: {
     ka: "პროექტის შექმნა ხელშეკრულებიდან",

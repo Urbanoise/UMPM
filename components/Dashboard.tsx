@@ -179,9 +179,6 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <LangToggle />
-          <button className="btn" onClick={() => setModal("contract")}>
-            {t("uploadContract")}
-          </button>
           <button className="btn btn-primary" onClick={() => setModal("create")}>
             {t("newProject")}
           </button>
@@ -281,6 +278,11 @@ export default function Dashboard() {
         <ProjectFormModal
           initial={modal === "edit" ? selected : null}
           people={people}
+          // Only offered while creating: importing a contract makes a new
+          // project, it cannot fill in the one being edited.
+          onUploadContract={
+            modal === "create" ? () => setModal("contract") : undefined
+          }
           onClose={() => setModal("closed")}
           onSaved={() => {
             setModal("closed");

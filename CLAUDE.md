@@ -20,6 +20,13 @@ npm run db:setup -- --seed  # schema + import data/seed.json (skipped if project
 There is no test framework in this project. Verify changes by running `npm run dev`
 and exercising the UI or the API (`curl http://localhost:3000/api/projects`).
 
+**There is no development database.** `DATABASE_URL` in `.env.local` is the same
+Neon instance the deployed site uses, so anything written while testing locally
+shows up on the real dashboard immediately. Give test rows obviously disposable
+names, delete them in the same session, and re-read the project list afterwards
+to confirm the cleanup rather than assuming it worked. Check what a destructive
+query matches before running it.
+
 `DATABASE_URL` must be set — locally in `.env.local` (copy `.env.example`), on
 Vercel by the Neon integration. `ANTHROPIC_API_KEY` is needed only by the
 contract upload route; everything else runs without it. `scripts/setup-db.mjs`
@@ -128,6 +135,9 @@ back into `Dashboard.reorder`.
   Vercel from `main`.
 - Contract uploads are capped at 4 MB (`MAX_UPLOAD_BYTES`) because Vercel caps a
   serverless request body at ~4.5 MB, and the extract route sets
-  `maxDuration = 300`, which Vercel clamps to 60s on a Hobby plan.
+  `maxDuration = 300`, which Vercel clamps to 60s on a Hobby plan. Measured
+  extraction on one-page test contracts: 66s for Georgian `.docx`, 16s for
+  English PDF — so the Hobby ceiling is a real risk on longer documents, and
+  raising `effort` or the document length makes it worse.
 - `lib/presets.ts` mirrors a deliverables list from the separate STSPortal
   project (`STSPortal/src/ProposalPortal.jsx`) and is kept in sync by hand.

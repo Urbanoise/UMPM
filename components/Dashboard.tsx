@@ -3,18 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Project, Task } from "@/lib/types";
 import { useLang, type Lang, type StrKey } from "@/lib/i18n";
-import { applyTheme, useTheme, type Theme } from "@/lib/theme";
+import { applyTheme, useTheme, type ThemeChoice } from "@/lib/theme";
 import { splitAssignees } from "@/lib/assignees";
 import Gantt from "./Gantt";
 import StatTiles from "./StatTiles";
-import Workload from "./Workload";
+import WorkOverview from "./WorkOverview";
 import Deadlines from "./Deadlines";
 import ProjectHealth from "./ProjectHealth";
 import MilestoneCalendar from "./MilestoneCalendar";
-import StatusBreakdown from "./StatusBreakdown";
 import ProjectPanel from "./ProjectPanel";
 import ProjectFormModal from "./ProjectFormModal";
 import TaskFormModal from "./TaskFormModal";
+import ContractUploadModal from "./ContractUploadModal";
 import Logo from "./Logo";
 
 function LangToggle() {
@@ -50,15 +50,17 @@ function LangToggle() {
 
 function ThemeToggle() {
   const { t } = useLang();
-  const { theme, setTheme } = useTheme();
+  const { choice, theme, setTheme } = useTheme();
 
-  // Mirror the preference onto <html data-theme>, which is what globals.css
-  // selects on.
+  // Mirror the resolved theme onto <html data-theme>, which is what globals.css
+  // selects on. The buttons track `choice`, so "system" stays lit even though
+  // the page is painted light or dark.
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
-  const opts: { value: Theme; glyph: string; label: StrKey }[] = [
+  const opts: { value: ThemeChoice; glyph: string; label: StrKey }[] = [
+    { value: "system", glyph: "◐", label: "themeSystem" },
     { value: "light", glyph: "☀︎", label: "themeLight" },
     { value: "dark", glyph: "☾︎", label: "themeDark" },
   ];
@@ -72,12 +74,12 @@ function ThemeToggle() {
         <button
           key={o.value}
           onClick={() => setTheme(o.value)}
-          aria-pressed={theme === o.value}
+          aria-pressed={choice === o.value}
           aria-label={t(o.label)}
           title={t(o.label)}
           className="px-2.5 py-1 leading-5 font-medium"
           style={
-            theme === o.value
+            choice === o.value
               ? { background: "var(--accent)", color: "#ffffff" }
               : { color: "var(--text-secondary)" }
           }
@@ -93,8 +95,13 @@ export default function Dashboard() {
   const { t, lang } = useLang();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [modal, setModal] = useState<"closed" | "create" | "edit">("closed");
+  const [modal, setModal] = useState<
+    "closed" | "create" | "edit" | "contract"
+  >("closed");
   const [editTask, setEditTask] = useState<Task | null>(null);
+  // One project filter behind both overview panels, so narrowing either one
+  // narrows the other.
+  const [panelFilterId, setPanelFilterId] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/projects");
@@ -137,6 +144,11 @@ export default function Dashboard() {
 
   const selected = projects?.find((p) => p.id === selectedId) ?? null;
 
+  // A filtered project can be deleted or renamed away under us; fall back to
+  // "all projects" rather than leaving both panels stuck on a dead id.
+  const filterId =
+    projects?.some((p) => p.id === panelFilterId) ? panelFilterId : null;
+
   const people = useMemo(() => {
     const set = new Set<string>();
     for (const p of projects ?? []) {
@@ -167,6 +179,9 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <LangToggle />
+          <button className="btn" onClick={() => setModal("contract")}>
+            {t("uploadContract")}
+          </button>
           <button className="btn btn-primary" onClick={() => setModal("create")}>
             {t("newProject")}
           </button>
@@ -212,13 +227,17 @@ export default function Dashboard() {
           )}
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Workload
+            <WorkOverview
               projects={projects}
+              filterId={filterId}
+              onFilter={setPanelFilterId}
               onSelect={(id) => setSelectedId(id)}
               onEditTask={setEditTask}
             />
             <Deadlines
               projects={projects}
+              filterId={filterId}
+              onFilter={setPanelFilterId}
               onSelect={(id) => setSelectedId(id)}
               onEditTask={setEditTask}
             />
@@ -227,13 +246,10 @@ export default function Dashboard() {
             projects={projects}
             onSelect={(id) => setSelectedId(id)}
           />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <MilestoneCalendar
-              projects={projects}
-              onSelect={(id) => setSelectedId(id)}
-            />
-            <StatusBreakdown projects={projects} />
-          </div>
+          <MilestoneCalendar
+            projects={projects}
+            onSelect={(id) => setSelectedId(id)}
+          />
         </>
       )}
 
@@ -249,7 +265,19 @@ export default function Dashboard() {
         />
       )}
 
-      {modal !== "closed" && (
+      {modal === "contract" && (
+        <ContractUploadModal
+          people={people}
+          onClose={() => setModal("closed")}
+          onCreated={(id) => {
+            setModal("closed");
+            setSelectedId(id);
+            refresh();
+          }}
+        />
+      )}
+
+      {(modal === "create" || modal === "edit") && (
         <ProjectFormModal
           initial={modal === "edit" ? selected : null}
           people={people}

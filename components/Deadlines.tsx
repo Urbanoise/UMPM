@@ -5,6 +5,7 @@ import type { Project, Task } from "@/lib/types";
 import { addDays, fmtShortDate, parseDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
 import { deliverableNames } from "@/lib/linked";
+import ProjectFilter from "./ProjectFilter";
 
 const HORIZON_DAYS = 42;
 const COLLAPSED_COUNT = 12;
@@ -45,10 +46,14 @@ function KindMark({ kind, color }: { kind: Item["kind"]; color: string }) {
 
 export default function Deadlines({
   projects,
+  filterId,
+  onFilter,
   onSelect,
   onEditTask,
 }: {
   projects: Project[];
+  filterId: number | null;
+  onFilter: (id: number | null) => void;
   onSelect: (id: number) => void;
   onEditTask: (task: Task) => void;
 }) {
@@ -56,7 +61,7 @@ export default function Deadlines({
   const [expanded, setExpanded] = useState(false);
   const today = todayStr();
 
-  const { overdue, upcoming } = useMemo(() => {
+  const items = useMemo(() => {
     const horizon = addDays(parseDate(today), HORIZON_DAYS)
       .toISOString()
       .slice(0, 10);
@@ -97,13 +102,24 @@ export default function Deadlines({
       }
     }
     items.sort((a, b) => a.date.localeCompare(b.date));
-    return {
-      overdue: items.filter((i) => i.overdue),
-      upcoming: items.filter((i) => !i.overdue),
-    };
+    return items;
   }, [projects, today]);
 
-  const all = [...overdue, ...upcoming];
+  // Only projects that actually have something in the horizon — an option that
+  // filters down to nothing is a dead end in this panel's own dropdown.
+  const relevant = useMemo(
+    () => new Set(items.map((i) => i.project.id)),
+    [items]
+  );
+
+  const all = useMemo(() => {
+    const list =
+      filterId === null
+        ? items
+        : items.filter((i) => i.project.id === filterId);
+    return [...list.filter((i) => i.overdue), ...list.filter((i) => !i.overdue)];
+  }, [items, filterId]);
+
   const shown = expanded ? all : all.slice(0, COLLAPSED_COUNT);
   const hidden = all.length - shown.length;
 
@@ -145,8 +161,16 @@ export default function Deadlines({
 
   return (
     <section className="card p-4" aria-label={t("deadlinesTitle")}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold">{t("deadlinesTitle")}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="text-sm font-semibold">{t("deadlinesTitle")}</h2>
+          <ProjectFilter
+            projects={projects}
+            relevant={relevant}
+            value={filterId}
+            onChange={onFilter}
+          />
+        </div>
         <div className="flex items-center gap-4 text-xs text-ink-2">
           <span className="flex items-center gap-1.5">
             <KindMark kind="milestone" color="var(--text-muted)" />

@@ -27,6 +27,7 @@ const STRINGS = {
   },
 
   themeLabel: { ka: "თემა", en: "Theme" },
+  themeSystem: { ka: "სისტემური", en: "System" },
   themeLight: { ka: "ნათელი", en: "Light" },
   themeDark: { ka: "მუქი", en: "Dark" },
 
@@ -41,13 +42,16 @@ const STRINGS = {
   msOverdue: { ka: "⚠ ვადაგადაცილებული", en: "⚠ Overdue" },
   msUpcoming: { ka: "მოსალოდნელი", en: "Upcoming" },
 
-  workloadTitle: { ka: "დატვირთვა პირების მიხედვით", en: "Workload by person" },
-  workloadEmpty: { ka: "ღია თასქები არ არის.", en: "No open tasks." },
-  workloadHint: {
-    ka: "დააწკაპუნეთ სახელზე მისი ღია თასქების სანახავად.",
-    en: "Click a name to see their open tasks.",
+  overviewTitle: { ka: "სამუშაოს მიმოხილვა", en: "Work overview" },
+  overviewEmpty: { ka: "საჩვენებელი თასქები არ არის.", en: "No tasks to show." },
+  overviewHint: {
+    ka: "დააწკაპუნეთ სტრიქონზე მისი თასქების სანახავად.",
+    en: "Click a row to see its tasks.",
   },
-  openTasks: { ka: "ღია თასქები", en: "Open tasks" },
+  groupBy: { ka: "დაჯგუფება", en: "Group by" },
+  showCompleted: { ka: "დასრულებულების ჩვენება", en: "Show completed" },
+  allProjects: { ka: "ყველა პროექტი", en: "All projects" },
+  filterByProject: { ka: "პროექტის ფილტრი", en: "Filter by project" },
   noDate: { ka: "თარიღის გარეშე", en: "No date" },
   unassigned: { ka: "შემსრულებლის გარეშე", en: "Unassigned" },
   overdueWord: { ka: "ვადაგადაცილებული", en: "Overdue" },
@@ -74,7 +78,6 @@ const STRINGS = {
   },
   prevMonth: { ka: "წინა თვე", en: "Previous month" },
   nextMonth: { ka: "შემდეგი თვე", en: "Next month" },
-  breakdownTitle: { ka: "სტატუსების მიმოხილვა", en: "Status breakdown" },
   byAssignee: { ka: "შემსრულებლების მიხედვით", en: "By assignee" },
   byProject: { ka: "პროექტების მიხედვით", en: "By project" },
 
@@ -195,6 +198,65 @@ const STRINGS = {
   errSave: {
     ka: "შენახვისას მოხდა შეცდომა.",
     en: "Something went wrong saving the project.",
+  },
+
+  uploadContract: { ka: "ხელშეკრულების ატვირთვა", en: "Upload contract" },
+  contractTitle: {
+    ka: "პროექტის შექმნა ხელშეკრულებიდან",
+    en: "Create project from a contract",
+  },
+  contractPick: {
+    ka: "აირჩიეთ ხელშეკრულების ფაილი",
+    en: "Choose the contract file",
+  },
+  contractPickHint: {
+    ka: "PDF ან Word (.docx), მაქსიმუმ {mb} მბ. დასკანერებული ხელშეკრულებაც ვარგისია. ფაილი არსად ინახება.",
+    en: "PDF or Word (.docx), up to {mb} MB. A scanned contract works too. The file itself is not stored.",
+  },
+  contractRead: { ka: "წაკითხვა", en: "Read contract" },
+  contractReading: { ka: "ხელშეკრულება იკითხება…", en: "Reading the contract…" },
+  contractReadingHint: {
+    ka: "ჩვეულებრივ ნახევარი წუთი სჭირდება.",
+    en: "This usually takes about half a minute.",
+  },
+  contractReview: {
+    ka: "შეამოწმეთ წაკითხული ხელშეკრულება",
+    en: "Check what was read from the contract",
+  },
+  contractReviewHint: {
+    ka: "ყველა ველი რედაქტირებადია. პროექტი მხოლოდ „შექმნაზე“ დაჭერის შემდეგ შეიქმნება.",
+    en: "Every field is editable. Nothing is saved until you press Create.",
+  },
+  contractNotes: { ka: "დაშვებები და შენიშვნები", en: "Assumptions and notes" },
+  contractSigned: { ka: "ხელმოწერის თარიღი", en: "Signature date" },
+  contractRef: { ka: "ხელშეკრულება", en: "Contract" },
+  contractConfidenceLow: {
+    ka: "ამოკითხვა არასანდოა — გულდასმით შეამოწმეთ ყველა თარიღი.",
+    en: "Low confidence in this reading — check every date against the contract.",
+  },
+  contractDeliverables: {
+    ka: "ჩასაბარებელი დოკუმენტები ({n})",
+    en: "Deliverables ({n})",
+  },
+  contractTasks: { ka: "თასქები ({n})", en: "Tasks ({n})" },
+  contractNoRows: {
+    ka: "ხელშეკრულებიდან ვერაფერი ამოვიკითხე.",
+    en: "Nothing was found in the contract.",
+  },
+  contractRemoveRow: { ka: "სტრიქონის წაშლა:", en: "Remove:" },
+  contractAnother: { ka: "სხვა ფაილი", en: "Another file" },
+  contractCreate: { ka: "პროექტის შექმნა", en: "Create project" },
+  errContractType: {
+    ka: "მხოლოდ PDF და Word (.docx) ფაილებია დაშვებული.",
+    en: "Only PDF and Word (.docx) files are supported.",
+  },
+  errContractSize: {
+    ka: "ფაილი ძალიან დიდია — მაქსიმუმი {mb} მბ.",
+    en: "That file is too large — the limit is {mb} MB.",
+  },
+  errContractRead: {
+    ka: "ხელშეკრულების წაკითხვა ვერ მოხერხდა.",
+    en: "Could not read the contract.",
   },
 } as const;
 

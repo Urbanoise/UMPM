@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryOne, transaction } from "@/lib/db";
-import { getAllProjects } from "@/lib/queries";
+import { getAllProjects, nextProjectPlacement } from "@/lib/queries";
 import { PROJECT_STATUSES } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -25,12 +25,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const { max_id, max_order } = (await queryOne<{
-    max_id: number;
-    max_order: number;
-  }>(
-    "SELECT COALESCE(MAX(id), 0) AS max_id, COALESCE(MAX(sort_order), -1) AS max_order FROM projects"
-  ))!;
+  const { color_slot, sort_order } = await nextProjectPlacement();
   const row = await queryOne<{ id: number }>(
     `INSERT INTO projects (name, description, start_date, end_date, status, responsible, color_slot, sort_order, tentative)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -42,8 +37,8 @@ export async function POST(req: Request) {
       end_date,
       PROJECT_STATUSES.includes(status) ? status : "planned",
       responsible?.trim() || null,
-      max_id % 8,
-      max_order + 1,
+      color_slot,
+      sort_order,
       tentative ? 1 : 0,
     ]
   );

@@ -37,10 +37,11 @@ export default function RootLayout({
       <head>
         {/* Runs while the HTML is still parsing, before anything is painted, so
             a dark-theme user never sees a flash of the light palette. Kept in
-            sync with lib/theme.ts — same storage key, same resolution rule. */}
+            sync with lib/theme.ts — same storage key, same resolution rule:
+            an explicit pick wins, otherwise the OS preference decides. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{if(localStorage.getItem("theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}})()`,
+            __html: `(function(){try{var c=localStorage.getItem("theme");if(c==="dark"||(c!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.dataset.theme="dark"}catch(e){}})()`,
           }}
         />
       </head>

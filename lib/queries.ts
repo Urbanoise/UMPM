@@ -57,3 +57,18 @@ export async function syncTaskFromDeliverable(milestoneId: number) {
     [milestoneId]
   );
 }
+
+/**
+ * Where a newly created project lands: its colour slot (fixed at creation, so a
+ * project keeps its colour as others come and go) and its position at the end of
+ * the current ordering. Shared by the manual create form and contract import.
+ */
+export async function nextProjectPlacement(): Promise<{
+  color_slot: number;
+  sort_order: number;
+}> {
+  const row = (await queryOne<{ max_id: number; max_order: number }>(
+    "SELECT COALESCE(MAX(id), 0) AS max_id, COALESCE(MAX(sort_order), -1) AS max_order FROM projects"
+  ))!;
+  return { color_slot: row.max_id % 8, sort_order: row.max_order + 1 };
+}

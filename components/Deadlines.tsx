@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { Project, Task } from "@/lib/types";
 import { addDays, fmtShortDate, parseDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
+import { PANEL_IDS } from "./StatTiles";
 import { deliverableNames } from "@/lib/linked";
 import ProjectFilter from "./ProjectFilter";
 
@@ -160,7 +161,7 @@ export default function Deadlines({
   }
 
   return (
-    <section className="card p-4" aria-label={t("deadlinesTitle")}>
+    <section id={PANEL_IDS.deadlines} className="card scroll-mt-4 p-4" aria-label={t("deadlinesTitle")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <h2 className="text-sm font-semibold">{t("deadlinesTitle")}</h2>

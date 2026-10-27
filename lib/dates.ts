@@ -63,6 +63,13 @@ export function fmtMonthYear(d: Date, locale: string): string {
   return d.toLocaleDateString(locale, { month: "long", year: "numeric" });
 }
 
+/** "იან ’26" / "Jan ’26" — compact month label for timeline axes. */
+export function fmtMonthShort(d: Date, locale: string): string {
+  const yy = String(d.getFullYear()).slice(2);
+  if (isKa(locale)) return `${KA_MONTHS_SHORT[d.getMonth()]} ’${yy}`;
+  return `${d.toLocaleDateString("en-US", { month: "short" })} ’${yy}`;
+}
+
 /** Monday-first narrow weekday initials. */
 export function weekdayInitials(locale: string): string[] {
   if (isKa(locale)) return [...KA_WEEKDAYS_NARROW];

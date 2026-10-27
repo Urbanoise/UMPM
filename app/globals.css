@@ -95,6 +95,43 @@ body {
   border-radius: 12px;
 }
 
+/* Stat tiles are buttons that jump to a panel; lift them a little on hover. */
+.stat-tile {
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    border-color 150ms ease;
+}
+.stat-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--baseline);
+  box-shadow: 0 6px 16px -8px rgb(0 0 0 / 0.25);
+}
+.stat-tile:active {
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .stat-tile,
+  .stat-tile:hover {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Brief ring on the panel a stat tile jumped to. */
+@keyframes panel-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+.panel-flash {
+  animation: panel-flash 1.4s ease-out;
+}
+
 input,
 select,
 textarea {

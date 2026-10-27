@@ -4,6 +4,7 @@ import { ReactNode, useMemo, useRef, useState } from "react";
 import type { Project } from "@/lib/types";
 import { fmtDate, parseDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
+import { PANEL_IDS } from "./StatTiles";
 
 const DAY = 86_400_000;
 // tasks-done % lagging time-elapsed % by more than this reads as slipping
@@ -140,7 +141,7 @@ export default function ProjectHealth({
   if (rows.length === 0) return null;
 
   return (
-    <section className="card p-4" aria-label={t("healthTitle")}>
+    <section id={PANEL_IDS.health} className="card scroll-mt-4 p-4" aria-label={t("healthTitle")}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold">{t("healthTitle")}</h2>
         <div className="flex items-center gap-4 text-xs text-ink-2">

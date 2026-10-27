@@ -6,7 +6,7 @@ import { useLang, type Lang, type StrKey } from "@/lib/i18n";
 import { applyTheme, useTheme, type ThemeChoice } from "@/lib/theme";
 import { splitAssignees } from "@/lib/assignees";
 import Gantt from "./Gantt";
-import StatTiles from "./StatTiles";
+import StatTiles, { PANEL_IDS } from "./StatTiles";
 import WorkOverview from "./WorkOverview";
 import Deadlines from "./Deadlines";
 import ProjectHealth from "./ProjectHealth";
@@ -15,6 +15,7 @@ import ProjectPanel from "./ProjectPanel";
 import ProjectFormModal from "./ProjectFormModal";
 import TaskFormModal from "./TaskFormModal";
 import ContractUploadModal from "./ContractUploadModal";
+import ExportModal from "./ExportModal";
 import Logo from "./Logo";
 
 function LangToggle() {
@@ -96,34 +97,45 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [modal, setModal] = useState<
-    "closed" | "create" | "edit" | "contract"
+    "closed" | "create" | "edit" | "contract" | "export"
   >("closed");
   const [editTask, setEditTask] = useState<Task | null>(null);
   // One project filter behind both overview panels, so narrowing either one
   // narrows the other.
   const [panelFilterId, setPanelFilterId] = useState<number | null>(null);
+  // Finished projects are hidden from the timeline unless asked for.
+  const [showPast, setShowPast] = useState(false);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/projects");
     setProjects(await res.json());
   }, []);
 
-  const reorder = useCallback(async (orderedIds: number[]) => {
-    // optimistic: reshuffle local state immediately, then persist
-    setProjects((cur) => {
-      if (!cur) return cur;
-      const byId = new Map(cur.map((p) => [p.id, p]));
+  const reorder = useCallback(
+    async (visibleIds: number[]) => {
+      if (!projects) return;
+      // The timeline may be hiding finished projects, so it only reports the
+      // order of the rows it shows. Hidden projects keep their slots and the
+      // visible ones are poured into the remaining slots in their new order.
+      const visible = new Set(visibleIds);
+      let i = 0;
+      const orderedIds = projects.map((p) =>
+        visible.has(p.id) ? visibleIds[i++] : p.id
+      );
+      // optimistic: reshuffle local state immediately, then persist
+      const byId = new Map(projects.map((p) => [p.id, p]));
       const next = orderedIds
         .map((id) => byId.get(id))
         .filter((p): p is Project => p !== undefined);
-      return next.length === cur.length ? next : cur;
-    });
-    await fetch("/api/projects", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order: orderedIds }),
-    });
-  }, []);
+      if (next.length === projects.length) setProjects(next);
+      await fetch("/api/projects", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: orderedIds }),
+      });
+    },
+    [projects]
+  );
 
   // keep <html lang> in sync (useUiLang and screen readers rely on it)
   useEffect(() => {
@@ -148,6 +160,15 @@ export default function Dashboard() {
   // "all projects" rather than leaving both panels stuck on a dead id.
   const filterId =
     projects?.some((p) => p.id === panelFilterId) ? panelFilterId : null;
+
+  const hasPast = projects?.some((p) => p.status === "done") ?? false;
+  const timelineProjects = useMemo(
+    () =>
+      showPast
+        ? (projects ?? [])
+        : (projects ?? []).filter((p) => p.status !== "done"),
+    [projects, showPast]
+  );
 
   const people = useMemo(() => {
     const set = new Set<string>();
@@ -179,6 +200,11 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <LangToggle />
+          {projects.length > 0 && (
+            <button className="btn" onClick={() => setModal("export")}>
+              {t("export")}
+            </button>
+          )}
           <button className="btn btn-primary" onClick={() => setModal("create")}>
             {t("newProject")}
           </button>
@@ -196,9 +222,24 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          <div className="card overflow-x-auto p-4">
+          <div id={PANEL_IDS.gantt} className="card scroll-mt-4 overflow-x-auto p-4">
+            {hasPast && (
+              <label className="mb-2 flex w-fit cursor-pointer items-center gap-2 text-[13px] text-ink-2">
+                <input
+                  type="checkbox"
+                  checked={showPast}
+                  onChange={(e) => setShowPast(e.target.checked)}
+                />
+                {t("showPastProjects")}
+              </label>
+            )}
+            {timelineProjects.length === 0 && (
+              <p className="py-6 text-center text-sm text-ink-3">
+                {t("noActiveProjects")}
+              </p>
+            )}
             <Gantt
-              projects={projects}
+              projects={timelineProjects}
               selectedId={selectedId}
               onSelect={(id) =>
                 setSelectedId((cur) => (cur === id ? null : id))
@@ -259,6 +300,14 @@ export default function Dashboard() {
             setEditTask(null);
             refresh();
           }}
+        />
+      )}
+
+      {modal === "export" && (
+        <ExportModal
+          projects={projects}
+          initialId={selectedId}
+          onClose={() => setModal("closed")}
         />
       )}
 

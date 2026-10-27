@@ -10,6 +10,10 @@ const STRINGS = {
   loading: { ka: "იტვირთება…", en: "Loading…" },
 
   statProjects: { ka: "პროექტები", en: "Projects" },
+  statProjectsOngoing: {
+    ka: "პროექტები: მიმდინარე / ყველა",
+    en: "Projects: ongoing / all",
+  },
   statActive: { ka: "მიმდინარე", en: "Active" },
   statMilestones30: {
     ka: "ჩასაბარებელი დოკუმენტები უახლოეს 30 დღეში",
@@ -36,6 +40,28 @@ const STRINGS = {
     en: "Drag to reorder project",
   },
 
+  export: { ka: "ექსპორტი", en: "Export" },
+  exportTitle: { ka: "განრიგის ექსპორტი", en: "Export Gantt chart" },
+  exportSelectAll: { ka: "ყველა", en: "All" },
+  exportSelectNone: { ka: "არცერთი", en: "None" },
+  exportIncludeTasks: { ka: "თასქების ჩართვა", en: "Include tasks" },
+  exportWorking: { ka: "მზადდება…", en: "Preparing…" },
+  errExportNone: {
+    ka: "მონიშნეთ მინიმუმ ერთი პროექტი.",
+    en: "Select at least one project.",
+  },
+  errExport: { ka: "ექსპორტი ვერ მოხერხდა.", en: "Export failed." },
+  exportGenerated: { ka: "შექმნილია {date}", en: "Generated {date}" },
+  exportPage: { ka: "გვ. {n}/{total}", en: "Page {n} of {total}" },
+  exportContinued: { ka: "გაგრძელება", en: "cont." },
+  colName: { ka: "დასახელება", en: "Name" },
+  colStart: { ka: "დაწყება", en: "Start" },
+  colEnd: { ka: "დასრულება", en: "End" },
+  colPerson: {
+    ka: "პასუხისმგებელი / შემსრულებელი",
+    en: "Responsible / assignee",
+  },
+
   today: { ka: "დღეს", en: "TODAY" },
   tasksDoneSuffix: { ka: "თასქი შესრულებულია", en: "tasks done" },
   msDone: { ka: "✓ შესრულებულია", en: "✓ Done" },
@@ -52,6 +78,14 @@ const STRINGS = {
   showCompleted: { ka: "დასრულებულების ჩვენება", en: "Show completed" },
   allProjects: { ka: "ყველა პროექტი", en: "All projects" },
   filterByProject: { ka: "პროექტის ფილტრი", en: "Filter by project" },
+  showPastProjects: {
+    ka: "დასრულებული პროექტების ჩვენება",
+    en: "Show past projects",
+  },
+  noActiveProjects: {
+    ka: "აქტიური პროექტები არ არის.",
+    en: "No active projects.",
+  },
   noDate: { ka: "თარიღის გარეშე", en: "No date" },
   unassigned: { ka: "შემსრულებლის გარეშე", en: "Unassigned" },
   overdueWord: { ka: "ვადაგადაცილებული", en: "Overdue" },
@@ -111,6 +145,11 @@ const STRINGS = {
   add: { ka: "დამატება", en: "Add" },
   taskStart: { ka: "თასქის დაწყება", en: "Task start date" },
   taskEnd: { ka: "თასქის დასრულება", en: "Task end date" },
+  markProjectDone: { ka: "პროექტის დასრულება", en: "Mark project done" },
+  confirmComplete: {
+    ka: "დავასრულო პროექტი „{name}“? {n} ღია თასქი და ჩასაბარებელი დოკუმენტი მოინიშნება შესრულებულად.",
+    en: 'Mark project "{name}" done? {n} open tasks and deliverables will be marked done.',
+  },
   confirmDelete: {
     ka: "წავშალო პროექტი „{name}“ ყველა ჩასაბარებელი დოკუმენტითა და თასქით?",
     en: 'Delete project "{name}" and all its deliverables and tasks?',

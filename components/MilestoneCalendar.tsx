@@ -4,6 +4,7 @@ import { ReactNode, useMemo, useRef, useState } from "react";
 import type { Project } from "@/lib/types";
 import { fmtMonthYear, todayStr, weekdayInitials } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
+import { PANEL_IDS } from "./StatTiles";
 import { deliverableNames } from "@/lib/linked";
 
 function typeColor(kind: "milestone" | "task") {
@@ -163,7 +164,7 @@ export default function MilestoneCalendar({
   }
 
   return (
-    <section className="card p-4" aria-label={t("calendarTitle")}>
+    <section id={PANEL_IDS.calendar} className="card scroll-mt-4 p-4" aria-label={t("calendarTitle")}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold">{t("calendarTitle")}</h2>

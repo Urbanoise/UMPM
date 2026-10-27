@@ -139,6 +139,22 @@ export default function ProjectPanel({
     onChanged();
   }
 
+  // Anything still open — the button is hidden once the whole project is done.
+  const openCount =
+    p.tasks.filter((task) => task.status !== "done").length +
+    p.milestones.filter((m) => !m.done).length;
+  const fullyDone = p.status === "done" && openCount === 0;
+
+  async function completeProject() {
+    if (
+      openCount > 0 &&
+      !confirm(t("confirmComplete", { name: p.name, n: String(openCount) }))
+    )
+      return;
+    await api(`/api/projects/${p.id}/complete`, "POST");
+    onChanged();
+  }
+
   async function deleteProject() {
     if (!confirm(t("confirmDelete", { name: p.name }))) return;
     await api(`/api/projects/${p.id}`, "DELETE");
@@ -170,6 +186,11 @@ export default function ProjectPanel({
           )}
         </div>
         <div className="flex gap-2">
+          {!fullyDone && (
+            <button className="btn btn-primary" onClick={completeProject}>
+              ✓ {t("markProjectDone")}
+            </button>
+          )}
           <button className="btn" onClick={onEdit}>
             {t("edit")}
           </button>

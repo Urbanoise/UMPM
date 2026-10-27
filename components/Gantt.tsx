@@ -408,9 +408,13 @@ export default function Gantt({
             p.status === "done"
               ? end
               : Math.min(Math.max(todayMs, start), end);
-          const color = seriesVar(p.color_slot);
+          // Finished projects drop their series colour for a neutral grey so
+          // they recede behind the work that is still live.
+          const finished = p.status === "done";
+          const color = finished ? "var(--baseline)" : seriesVar(p.color_slot);
           const selected = p.id === selectedId;
-          const tentative = p.tentative === 1;
+          // An unconfirmed start date is moot once the project is finished.
+          const tentative = !finished && p.tentative === 1;
           return (
             <g key={p.id}>
               {selected && (
@@ -441,7 +445,7 @@ export default function Gantt({
                 textAnchor="start"
                 fontSize={13}
                 fontWeight={selected ? 600 : 400}
-                fill="var(--text-primary)"
+                fill={finished ? "var(--text-muted)" : "var(--text-primary)"}
                 style={{ cursor: "pointer" }}
                 onClick={() => onSelect(p.id)}
               >

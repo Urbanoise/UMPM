@@ -8,6 +8,7 @@ import {
   buildXlsx,
   downloadBlob,
   exportFileName,
+  type ExportAudience,
 } from "@/lib/exportGantt";
 
 function seriesVar(slot: number) {
@@ -31,6 +32,7 @@ export default function ExportModal({
       new Set(initialId !== null ? [initialId] : projects.map((p) => p.id))
   );
   const [includeTasks, setIncludeTasks] = useState(true);
+  const [audience, setAudience] = useState<ExportAudience>("client");
   const [busy, setBusy] = useState<"xlsx" | "pdf" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +56,7 @@ export default function ExportModal({
     setError(null);
     setBusy(format);
     try {
-      const opts = { includeTasks, t, locale };
+      const opts = { includeTasks, audience, t, locale };
       const blob =
         format === "xlsx"
           ? await buildXlsx(chosen, opts)
@@ -146,6 +148,26 @@ export default function ExportModal({
           />
           {t("exportIncludeTasks")}
         </label>
+
+        <fieldset className="mt-4">
+          <legend className="text-sm text-ink-2">{t("exportAudience")}</legend>
+          <div className="mt-1.5 flex gap-5 text-sm">
+            {(["client", "internal"] as const).map((a) => (
+              <label key={a} className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="radio"
+                  name="export-audience"
+                  checked={audience === a}
+                  onChange={() => setAudience(a)}
+                />
+                {t(a === "client" ? "exportForClient" : "exportInternal")}
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-ink-3">
+            {t(audience === "client" ? "exportForClientHint" : "exportInternalHint")}
+          </p>
+        </fieldset>
 
         {error && (
           <p className="mt-3 text-sm text-[var(--status-critical)]">{error}</p>

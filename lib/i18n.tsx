@@ -45,6 +45,17 @@ const STRINGS = {
   exportSelectAll: { ka: "ყველა", en: "All" },
   exportSelectNone: { ka: "არცერთი", en: "None" },
   exportIncludeTasks: { ka: "თასქების ჩართვა", en: "Include tasks" },
+  exportAudience: { ka: "ვისთვის", en: "Audience" },
+  exportForClient: { ka: "კლიენტისთვის", en: "For Client" },
+  exportInternal: { ka: "შიდა გამოყენებისთვის", en: "Internal Use" },
+  exportForClientHint: {
+    ka: "სტატუსისა და პასუხისმგებელი პირის სვეტების გარეშე.",
+    en: "Without the Status and Responsible columns.",
+  },
+  exportInternalHint: {
+    ka: "სტატუსისა და პასუხისმგებელი პირის სვეტებით.",
+    en: "With the Status and Responsible columns.",
+  },
   exportWorking: { ka: "მზადდება…", en: "Preparing…" },
   errExportNone: {
     ka: "მონიშნეთ მინიმუმ ერთი პროექტი.",

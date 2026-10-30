@@ -1,4 +1,4 @@
-// Gantt chart export to XLSX (a dated table with a week-by-week bar grid) and
+// Gantt chart export to XLSX (a dated table with a day-by-day bar grid) and
 // PDF (the chart redrawn on canvas, one A4 landscape page per screenful of
 // rows). Everything runs in the browser on the projects Dashboard already
 // holds; exceljs and jspdf are imported on demand so they stay out of the main
@@ -10,8 +10,12 @@ import { deliverableNames } from "./linked";
 
 type T = (key: StrKey, params?: Record<string, string>) => string;
 
+// "client" leaves out the internal-only columns (status, responsible person).
+export type ExportAudience = "client" | "internal";
+
 export type ExportOptions = {
   includeTasks: boolean;
+  audience: ExportAudience;
   t: T;
   locale: string;
 };
@@ -123,8 +127,6 @@ export function downloadBlob(blob: Blob, name: string) {
 
 // ---------------------------------------------------------------- XLSX
 
-const FIXED_COLS = 5; // name, start, end, status, person
-
 function argb(hex: string) {
   return "FF" + hex.slice(1).toUpperCase();
 }
@@ -146,23 +148,30 @@ function excelDate(s: string | null) {
 
 export async function buildXlsx(
   projects: Project[],
-  { includeTasks, t, locale }: ExportOptions
+  { includeTasks, audience, t, locale }: ExportOptions
 ): Promise<Blob> {
   const ExcelJS = (await import("exceljs")).default;
   const today = todayStr();
   const todayMs = ms(today);
+  const internal = audience === "internal";
+  // name, start, end — plus status and person for internal use only
+  const FIXED_COLS = internal ? 5 : 3;
 
-  // one timeline column per Monday-starting week
+  // one timeline column per calendar day; stepping with setDate keeps each
+  // value at local midnight across DST changes
   const { min, max } = range(projects, includeTasks);
-  const weeks: number[] = [];
+  const days: number[] = [];
   const d = new Date(min);
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
   while (d.getTime() < max) {
-    weeks.push(d.getTime());
-    d.setDate(d.getDate() + 7);
+    days.push(d.getTime());
+    d.setDate(d.getDate() + 1);
   }
-  const weekEnd = (i: number) => weeks[i + 1] ?? weeks[i] + 7 * DAY;
+  const dayEnd = (i: number) => days[i + 1] ?? days[i] + DAY;
+  const weekend = (tm: number) => {
+    const wd = new Date(tm).getDay();
+    return wd === 0 || wd === 6;
+  };
 
   const wb = new ExcelJS.Workbook();
   wb.created = new Date();
@@ -180,9 +189,8 @@ export async function buildXlsx(
     { width: 44 },
     { width: 12 },
     { width: 12 },
-    { width: 18 },
-    { width: 24 },
-    ...weeks.map(() => ({ width: 3.6 })),
+    ...(internal ? [{ width: 18 }, { width: 24 }] : []),
+    ...days.map(() => ({ width: 3.2 })),
   ];
 
   // header: fixed column titles span both rows; months over day-of-month
@@ -190,8 +198,7 @@ export async function buildXlsx(
     t("colName"),
     t("colStart"),
     t("colEnd"),
-    t("fieldStatus"),
-    t("colPerson"),
+    ...(internal ? [t("fieldStatus"), t("colPerson")] : []),
   ];
   const head1 = ws.getRow(1);
   const head2 = ws.getRow(2);
@@ -200,23 +207,25 @@ export async function buildXlsx(
     ws.mergeCells(1, i + 1, 2, i + 1);
   });
   let monthStart = 0;
-  weeks.forEach((w, i) => {
+  days.forEach((day, i) => {
     const col = FIXED_COLS + 1 + i;
-    const date = new Date(w);
+    const date = new Date(day);
     head2.getCell(col).value = date.getDate();
-    const next = weeks[i + 1];
+    const next = days[i + 1];
     if (next === undefined || new Date(next).getMonth() !== date.getMonth()) {
       head1.getCell(FIXED_COLS + 1 + monthStart).value = fmtMonthShort(
-        new Date(weeks[monthStart]),
+        new Date(days[monthStart]),
         locale
       );
       if (i > monthStart)
         ws.mergeCells(1, FIXED_COLS + 1 + monthStart, 1, col);
       monthStart = i + 1;
     }
-    if (w <= todayMs && todayMs < weekEnd(i)) {
+    if (day <= todayMs && todayMs < dayEnd(i)) {
       head2.getCell(col).fill = solid(CRITICAL);
       head2.getCell(col).font = { bold: true, color: { argb: argb("#ffffff") } };
+    } else if (weekend(day)) {
+      head2.getCell(col).fill = solid(tint(GRID, 0.6));
     }
   });
   for (const row of [head1, head2]) {
@@ -249,8 +258,7 @@ export async function buildXlsx(
       opts.name,
       excelDate(opts.start),
       excelDate(opts.end),
-      opts.status,
-      opts.person ?? "",
+      ...(internal ? [opts.status, opts.person ?? ""] : []),
     ]);
     const color = argb(opts.muted ? MUTED : INK);
     for (let c = 1; c <= FIXED_COLS; c++)
@@ -258,21 +266,21 @@ export async function buildXlsx(
     row.getCell(1).alignment = { indent: opts.indent ? 2 : 0 };
     row.getCell(2).numFmt = "dd.mm.yyyy";
     row.getCell(3).numFmt = "dd.mm.yyyy";
-    if (opts.statusRed)
+    if (internal && opts.statusRed)
       row.getCell(4).font = { bold: opts.bold, color: { argb: argb(CRITICAL) } };
 
-    weeks.forEach((w, i) => {
+    days.forEach((day, i) => {
       const cell = row.getCell(FIXED_COLS + 1 + i);
-      const end = weekEnd(i);
+      const end = dayEnd(i);
       const bar = opts.bar;
-      if (bar && w < bar.to && end > bar.from) {
-        // a week counts as elapsed once at least half of it is — or once the
-        // whole bar is, however little of this week the bar covers
-        const elapsed =
-          bar.solidUntil >= bar.to || w + (end - w) / 2 < bar.solidUntil;
+      if (bar && day < bar.to && end > bar.from) {
+        // a day counts as elapsed once it is over — or once the whole bar is
+        const elapsed = bar.solidUntil >= bar.to || end <= bar.solidUntil;
         cell.fill = solid(elapsed ? bar.color : tint(bar.color, 0.32));
+      } else if (weekend(day)) {
+        cell.fill = solid(tint(GRID, 0.35));
       }
-      if (opts.diamond && w <= opts.diamond.at && opts.diamond.at < end) {
+      if (opts.diamond && day <= opts.diamond.at && opts.diamond.at < end) {
         cell.value = "◆";
         cell.font = { color: { argb: argb(opts.diamond.color) } };
         cell.alignment = { horizontal: "center" };

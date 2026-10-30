@@ -89,6 +89,7 @@ const STRINGS = {
   showCompleted: { ka: "დასრულებულების ჩვენება", en: "Show completed" },
   allProjects: { ka: "ყველა პროექტი", en: "All projects" },
   filterByProject: { ka: "პროექტის ფილტრი", en: "Filter by project" },
+  nProjects: { ka: "{n} პროექტი", en: "{n} projects" },
   showPastProjects: {
     ka: "დასრულებული პროექტების ჩვენება",
     en: "Show past projects",

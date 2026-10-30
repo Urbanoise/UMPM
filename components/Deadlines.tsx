@@ -47,14 +47,14 @@ function KindMark({ kind, color }: { kind: Item["kind"]; color: string }) {
 
 export default function Deadlines({
   projects,
-  filterId,
+  filterIds,
   onFilter,
   onSelect,
   onEditTask,
 }: {
   projects: Project[];
-  filterId: number | null;
-  onFilter: (id: number | null) => void;
+  filterIds: Set<number>;
+  onFilter: (ids: Set<number>) => void;
   onSelect: (id: number) => void;
   onEditTask: (task: Task) => void;
 }) {
@@ -115,11 +115,11 @@ export default function Deadlines({
 
   const all = useMemo(() => {
     const list =
-      filterId === null
+      filterIds.size === 0
         ? items
-        : items.filter((i) => i.project.id === filterId);
+        : items.filter((i) => filterIds.has(i.project.id));
     return [...list.filter((i) => i.overdue), ...list.filter((i) => !i.overdue)];
-  }, [items, filterId]);
+  }, [items, filterIds]);
 
   const shown = expanded ? all : all.slice(0, COLLAPSED_COUNT);
   const hidden = all.length - shown.length;
@@ -168,7 +168,7 @@ export default function Deadlines({
           <ProjectFilter
             projects={projects}
             relevant={relevant}
-            value={filterId}
+            value={filterIds}
             onChange={onFilter}
           />
         </div>

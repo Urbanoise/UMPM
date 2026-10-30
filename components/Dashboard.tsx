@@ -16,6 +16,7 @@ import ProjectFormModal from "./ProjectFormModal";
 import TaskFormModal from "./TaskFormModal";
 import ContractUploadModal from "./ContractUploadModal";
 import ExportModal from "./ExportModal";
+import ProjectFilter from "./ProjectFilter";
 import Logo from "./Logo";
 
 function LangToggle() {
@@ -100,9 +101,11 @@ export default function Dashboard() {
     "closed" | "create" | "edit" | "contract" | "export"
   >("closed");
   const [editTask, setEditTask] = useState<Task | null>(null);
-  // One project filter behind both overview panels, so narrowing either one
-  // narrows the other.
-  const [panelFilterId, setPanelFilterId] = useState<number | null>(null);
+  // One project filter behind the timeline and both overview panels, so
+  // narrowing any one narrows the others. Empty means "all projects".
+  const [filterPicked, setFilterPicked] = useState<Set<number>>(
+    () => new Set()
+  );
   // Finished projects are hidden from the timeline unless asked for.
   const [showPast, setShowPast] = useState(false);
 
@@ -156,18 +159,38 @@ export default function Dashboard() {
 
   const selected = projects?.find((p) => p.id === selectedId) ?? null;
 
-  // A filtered project can be deleted or renamed away under us; fall back to
-  // "all projects" rather than leaving both panels stuck on a dead id.
-  const filterId =
-    projects?.some((p) => p.id === panelFilterId) ? panelFilterId : null;
-
   const hasPast = projects?.some((p) => p.status === "done") ?? false;
+  // A filtered project can be deleted under us; its id drops out here so a
+  // dead id can never leave the panels filtered down to nothing.
+  const picked = useMemo(
+    () =>
+      new Set(
+        (projects ?? [])
+          .filter((p) => filterPicked.has(p.id))
+          .map((p) => p.id)
+      ),
+    [projects, filterPicked]
+  );
+  // The timeline's own list offers what "show past" allows.
+  const timelineRelevant = useMemo(
+    () =>
+      new Set(
+        (projects ?? [])
+          .filter((p) => showPast || p.status !== "done")
+          .map((p) => p.id)
+      ),
+    [projects, showPast]
+  );
+  // An explicit pick wins over "show past": a finished project the user ticked
+  // stays on the timeline.
   const timelineProjects = useMemo(
     () =>
-      showPast
-        ? (projects ?? [])
-        : (projects ?? []).filter((p) => p.status !== "done"),
-    [projects, showPast]
+      picked.size > 0
+        ? (projects ?? []).filter((p) => picked.has(p.id))
+        : showPast
+          ? (projects ?? [])
+          : (projects ?? []).filter((p) => p.status !== "done"),
+    [projects, showPast, picked]
   );
 
   const people = useMemo(() => {
@@ -223,16 +246,24 @@ export default function Dashboard() {
       ) : (
         <>
           <div id={PANEL_IDS.gantt} className="card scroll-mt-4 overflow-x-auto p-4">
-            {hasPast && (
-              <label className="mb-2 flex w-fit cursor-pointer items-center gap-2 text-[13px] text-ink-2">
-                <input
-                  type="checkbox"
-                  checked={showPast}
-                  onChange={(e) => setShowPast(e.target.checked)}
-                />
-                {t("showPastProjects")}
-              </label>
-            )}
+            <div className="mb-2 flex flex-wrap items-center gap-4 empty:hidden">
+              <ProjectFilter
+                projects={projects}
+                relevant={timelineRelevant}
+                value={picked}
+                onChange={setFilterPicked}
+              />
+              {hasPast && (
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-ink-2">
+                  <input
+                    type="checkbox"
+                    checked={showPast}
+                    onChange={(e) => setShowPast(e.target.checked)}
+                  />
+                  {t("showPastProjects")}
+                </label>
+              )}
+            </div>
             {timelineProjects.length === 0 && (
               <p className="py-6 text-center text-sm text-ink-3">
                 {t("noActiveProjects")}
@@ -267,15 +298,15 @@ export default function Dashboard() {
           <div className="grid gap-4 lg:grid-cols-2">
             <WorkOverview
               projects={projects}
-              filterId={filterId}
-              onFilter={setPanelFilterId}
+              filterIds={picked}
+              onFilter={setFilterPicked}
               onSelect={(id) => setSelectedId(id)}
               onEditTask={setEditTask}
             />
             <Deadlines
               projects={projects}
-              filterId={filterId}
-              onFilter={setPanelFilterId}
+              filterIds={picked}
+              onFilter={setFilterPicked}
               onSelect={(id) => setSelectedId(id)}
               onEditTask={setEditTask}
             />

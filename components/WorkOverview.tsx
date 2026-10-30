@@ -78,14 +78,14 @@ function emptyCounts(): Counts {
 
 export default function WorkOverview({
   projects,
-  filterId,
+  filterIds,
   onFilter,
   onSelect,
   onEditTask,
 }: {
   projects: Project[];
-  filterId: number | null;
-  onFilter: (id: number | null) => void;
+  filterIds: Set<number>;
+  onFilter: (ids: Set<number>) => void;
   onSelect: (id: number) => void;
   onEditTask: (task: Task) => void;
 }) {
@@ -115,7 +115,7 @@ export default function WorkOverview({
       ? projects
       : projects.filter((p) => p.status !== "done");
     const visible =
-      filterId === null ? pool : pool.filter((p) => p.id === filterId);
+      filterIds.size === 0 ? pool : pool.filter((p) => filterIds.has(p.id));
 
     const entries: Entry[] = [];
     for (const p of visible) {
@@ -192,7 +192,7 @@ export default function WorkOverview({
       taskTotal: entries.length,
       rows,
     };
-  }, [projects, today, showDone, groupBy, filterId]);
+  }, [projects, today, showDone, groupBy, filterIds]);
 
   const max = Math.max(1, ...rows.map((r) => r.total));
 
@@ -305,7 +305,7 @@ export default function WorkOverview({
           <ProjectFilter
             projects={projects}
             relevant={relevant}
-            value={filterId}
+            value={filterIds}
             onChange={onFilter}
           />
         </div>

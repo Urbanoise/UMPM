@@ -68,8 +68,10 @@ never `new Date(str)` directly.
 UI) with the same `name` inside the same project are one commitment shown twice.
 The link is by name only — there is no foreign key. `lib/linked.ts` detects it
 client-side; `syncDeliverablesFromTasks` / `syncTaskFromDeliverable` in
-`lib/queries.ts` keep the dates in step server-side. Any route that writes
-`tasks.end_date`, `tasks.name`, `milestones.due_date` or `milestones.name` must
+`lib/queries.ts` keep the dates and completion (task status `done` ⇔ milestone
+`done = 1`) in step server-side. Any route that writes `tasks.end_date`,
+`tasks.name`, `tasks.status`, `milestones.due_date`, `milestones.name` or
+`milestones.done` must
 call the matching sync helper afterwards (a rename can re-point the link, so
 name changes trigger a re-sync too).
 

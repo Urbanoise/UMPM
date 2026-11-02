@@ -23,7 +23,11 @@ export async function PATCH(req: Request, { params }: Params) {
     id,
   ]);
   // A rename can link the deliverable to a different task, so re-sync on that too.
-  if (fields.due_date !== undefined || fields.name !== undefined) {
+  if (
+    fields.due_date !== undefined ||
+    fields.name !== undefined ||
+    fields.done !== undefined
+  ) {
     await syncTaskFromDeliverable(id);
   }
   return NextResponse.json({ ok: true });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Project } from "@/lib/types";
+import type { Project, TaskCategory } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 import {
   buildPdf,
@@ -20,10 +20,12 @@ function seriesVar(slot: number) {
 export default function ExportModal({
   projects,
   initialId,
+  categories,
   onClose,
 }: {
   projects: Project[];
   initialId: number | null;
+  categories: TaskCategory[];
   onClose: () => void;
 }) {
   const { t, locale } = useLang();
@@ -56,7 +58,7 @@ export default function ExportModal({
     setError(null);
     setBusy(format);
     try {
-      const opts = { includeTasks, audience, t, locale };
+      const opts = { includeTasks, audience, categories, t, locale };
       const blob =
         format === "xlsx"
           ? await buildXlsx(chosen, opts)
@@ -90,7 +92,7 @@ export default function ExportModal({
           <span className="text-sm text-ink-2">
             {t("statProjects")} ({picked.size}/{projects.length})
           </span>
-          <div className="flex gap-3 text-[13px]">
+          <div className="flex gap-3 text-[16px]">
             <button
               type="button"
               className="text-accent hover:underline"

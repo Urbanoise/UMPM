@@ -1,22 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import type { Task, TaskStatus } from "@/lib/types";
-import { TASK_STATUSES } from "@/lib/types";
+import type { Task, TaskCategory, TaskStatus } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 import { normalizeAssignees } from "@/lib/assignees";
+import { statusLabel, statusOrder } from "@/lib/taskStatus";
+import type { TrackEdit } from "@/lib/undo";
 import ComboBox from "./ComboBox";
 
 export default function TaskFormModal({
   task,
   people,
+  categories,
   onClose,
   onSaved,
+  track,
 }: {
   task: Task;
   people: string[];
+  categories: TaskCategory[];
   onClose: () => void;
   onSaved: () => void;
+  track: TrackEdit;
 }) {
   const { t } = useLang();
   const [name, setName] = useState(task.name);
@@ -24,6 +29,7 @@ export default function TaskFormModal({
   const [startDate, setStartDate] = useState(task.start_date ?? "");
   const [endDate, setEndDate] = useState(task.end_date ?? "");
   const [status, setStatus] = useState<TaskStatus>(task.status);
+  const [note, setNote] = useState(task.note ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -39,17 +45,20 @@ export default function TaskFormModal({
       return;
     }
     setSaving(true);
-    const res = await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        assignee: normalizeAssignees(assignee),
-        start_date: startDate,
-        end_date: endDate,
-        status,
-      }),
-    });
+    const res = await track(() =>
+      fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          assignee: normalizeAssignees(assignee),
+          start_date: startDate,
+          end_date: endDate,
+          status,
+          note,
+        }),
+      })
+    );
     setSaving(false);
     if (!res.ok) {
       setError(t("errSave"));
@@ -109,9 +118,9 @@ export default function TaskFormModal({
               value={status}
               onChange={(e) => setStatus(e.target.value as TaskStatus)}
             >
-              {TASK_STATUSES.map((s) => (
+              {statusOrder(categories).map((s) => (
                 <option key={s} value={s}>
-                  {t(`tstatus_${s}`)}
+                  {statusLabel(s, categories, t)}
                 </option>
               ))}
             </select>
@@ -128,6 +137,16 @@ export default function TaskFormModal({
             />
           </label>
         </div>
+
+        <label className="mt-3 block text-sm">
+          <span className="text-ink-2">{t("fieldTaskNote")}</span>
+          <textarea
+            className="mt-1 block w-full"
+            rows={3}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </label>
 
         {error && (
           <p className="mt-3 text-sm text-[var(--status-critical)]">{error}</p>

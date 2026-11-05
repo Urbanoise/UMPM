@@ -45,8 +45,9 @@ once, holds the whole `Project[]` (each project with its `milestones` and
 to an API route followed by `refresh()` — a full re-fetch of `/api/projects`.
 There is no client cache, no SWR/React Query, and no server-component data
 loading; keep new features on this pattern rather than introducing a second
-source of truth. Project reordering is the one optimistic update
-(`Dashboard.reorder`).
+source of truth. The optimistic updates are project reordering (`Dashboard.reorder`) and everything
+that goes through `Dashboard.commit`: drag results and status changes from the
+board and list. A failed `commit` restores the previous state and shows a toast.
 
 **Database layer.** `lib/db.ts` wraps `@neondatabase/serverless` (Postgres over
 HTTP, no pool) and exposes `query` / `queryOne` / `transaction`; the client is
@@ -64,6 +65,20 @@ strings in Postgres and in TypeScript, which is why string comparison
 Parse with `parseDate` from `lib/dates.ts` (appends `T00:00:00` for local time),
 never `new Date(str)` directly.
 
+**Task notes.** `tasks.note` is free text, edited in `TaskFormModal` and shown by `TaskNote` in the project panel, board and list. The calendar, deadlines and work overview reach it by opening that form; the Gantt shows no notes. Notes stay out of the Gantt export, which can go to clients.
+
+**Task categories.** `tasks.status` is TEXT: one of `TASK_STATUSES`, or `cat-<id>`
+for a row of `task_categories` (`lib/types.ts`). Everything else is built on the
+rule that any status other than `done` is open, so a custom category needs no
+special handling in the completion, overdue or sync logic; `isStarted` in
+`lib/taskStatus.ts` counts one as started for the Gantt fill and the overview.
+Order, labels and colours come from that same file: categories sit between the
+built-in open statuses and Done, oldest first, and take their colour from their id.
+`Dashboard` reads them alongside the projects as one snapshot. Deleting a category
+moves its tasks to `todo`; a deliverable with no task only ever offers `todo` and
+`done`. Write statuses through `isTaskStatus`, not `TASK_STATUSES`, except in
+contract import, which only uses the built-ins.
+
 **Tasks linked to deliverables.** A task and a milestone ("deliverable" in the
 UI) with the same `name` inside the same project are one commitment shown twice.
 The link is by name only — there is no foreign key. `lib/linked.ts` detects it
@@ -72,7 +87,7 @@ client-side; `syncDeliverablesFromTasks` / `syncTaskFromDeliverable` in
 `done = 1`) in step server-side. Any route that writes `tasks.end_date`,
 `tasks.name`, `tasks.status`, `milestones.due_date`, `milestones.name` or
 `milestones.done` must
-call the matching sync helper afterwards (a rename can re-point the link, so
+call the matching sync helper afterwards (`/api/restore` does too) (a rename can re-point the link, so
 name changes trigger a re-sync too).
 
 **API route conventions.** All handlers live under `app/api/`. PATCH bodies are
@@ -123,11 +138,55 @@ the same file then widens the project window to contain every extracted date,
 which the Gantt assumes. The uploaded file is never persisted.
 
 **Gantt.** `components/Gantt.tsx` is hand-written SVG with no chart library:
-module constants at the top control geometry (`ROW_H`, `GUTTER`, …), a linear
+module constants at the top control geometry (`ROW_H`, `BAR_H`, …), a linear
 `x(t)` maps epoch ms to pixels over an auto-computed date range, width comes
 from a `ResizeObserver`, and the selected project expands to show its dated
 tasks as sub-rows. It also implements pointer-based drag reordering that calls
-back into `Dashboard.reorder`.
+back into `Dashboard.reorder`. The name and due date columns can be dragged wider
+or narrower; `lib/ganttColumns.ts` remembers the widths per browser and clamps
+them so the timeline always keeps some room.
+
+**Views.** The first card on the dashboard renders Gantt, Board or List over the
+same `timelineProjects`, so the project filter and "show past" apply to all of
+them (the stat tiles follow the project filter too, but not "show past"); the choice is remembered per browser by `lib/viewMode.ts`. `BoardView`
+holds tasks only, one column per status or category, because a deliverable has no in-progress
+state. `ListView` groups tasks plus any deliverable with no matching task under
+each status, the chosen sort applying inside each group, and
+gives a linked pair the task's row. `CalendarView` is a permanent panel further
+down, not one of the views; it covers every project and draws each item as a bar
+over its start-to-end days (`calendarSpans` / `weekSegments` in
+`lib/workItems.ts`), so a linked pair is the task there too, marked as a
+deliverable, because only the task has a start date.
+
+**Drag and drop.** Pointer events in the Gantt (it is SVG), HTML5 drag events
+everywhere else. What a drag changes: Gantt bars move or resize dates, deliverable
+diamonds move their date, calendar bars move by whole days, board cards change
+status, list rows change status between groups, work-overview tasks change
+assignee. Moving a task's deadline shifts its
+start too, keeping its duration (`withDeadline`), and a deliverable linked to a
+task moves through that task. Dragging a project bar calls
+`POST /api/projects/[id]/shift`, which moves open tasks and deliverables with it
+but leaves finished ones on their real dates, and asks first; dragging a project's
+edge changes only the project's own dates. `lib/workItems.ts` holds these rules so
+the Gantt's live preview, the optimistic update and the saved result agree. Rows
+that are sorted automatically (order inside a board column or list group,
+deadlines, project health) are
+deliberately not draggable: there is no stored order for a drag to change.
+
+**Undo.** Ctrl+Z / Ctrl+Y (and the header buttons) undo edits and deletes.
+Saves go through `track` in `Dashboard`, which reads the projects and task
+categories from the server before and after, and keeps the field-level difference (`lib/undo.ts`)
+rather than an opposite action, because the server rules touch more than the
+edited row. `POST /api/restore` writes those values back, row by row, only where
+the row still holds what the edit left there, so a colleague's later change is
+skipped and reported, never overwritten. A deleted row returns with its original
+id, so older undo steps still apply to it; redoing a project delete is refused
+while the project holds rows the edit doesn't know about, because the delete would
+cascade to them. Saves and undos share one serial queue.
+The keys match on `e.code` because a Georgian layout reports `ზ` for Z. Any new
+edit must run inside `track` (through `commit`, or passed down as a prop) or it
+silently can't be undone. Creating rows is not undoable, and the history is per
+tab and lost on reload.
 
 ## Notes
 

@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import type { Project, Task } from "@/lib/types";
-import { addDays, fmtShortDate, parseDate, todayStr } from "@/lib/dates";
+import { fmtShortDate, shiftDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
 import { PANEL_IDS } from "./StatTiles";
 import { deliverableNames } from "@/lib/linked";
+import { seriesVar } from "@/lib/workItems";
 import ProjectFilter from "./ProjectFilter";
 
 const HORIZON_DAYS = 42;
@@ -21,11 +22,7 @@ type Item = {
   task?: Task;
 };
 
-function seriesVar(slot: number) {
-  return `var(--series-${((slot % 8) + 8) % 8})`;
-}
-
-function KindMark({ kind, color }: { kind: Item["kind"]; color: string }) {
+export function KindMark({ kind, color }: { kind: Item["kind"]; color: string }) {
   return (
     <svg width={12} height={12} viewBox="0 0 12 12" aria-hidden>
       {kind === "milestone" ? (
@@ -63,9 +60,7 @@ export default function Deadlines({
   const today = todayStr();
 
   const items = useMemo(() => {
-    const horizon = addDays(parseDate(today), HORIZON_DAYS)
-      .toISOString()
-      .slice(0, 10);
+    const horizon = shiftDate(today, HORIZON_DAYS);
     const items: Item[] = [];
     for (const p of projects) {
       for (const m of p.milestones) {
@@ -139,7 +134,7 @@ export default function Deadlines({
           }: ${item.name}, ${fmtShortDate(item.date, locale)}, ${item.project.name}`}
         >
           <span
-            className={`w-14 shrink-0 text-xs tabular-nums ${
+            className={`w-[4.75rem] shrink-0 whitespace-nowrap text-xs tabular-nums ${
               item.overdue
                 ? "font-semibold text-[var(--status-critical)]"
                 : "text-ink-2"
@@ -149,7 +144,7 @@ export default function Deadlines({
             {fmtShortDate(item.date, locale)}
           </span>
           <KindMark kind={item.kind} color={color} />
-          <span className="min-w-0 flex-1 truncate text-[13px]">
+          <span className="min-w-0 flex-1 truncate text-[16px]">
             {item.name}
           </span>
           <span className="max-w-32 shrink-0 truncate text-xs text-ink-3">

@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import type { Project, Task, TaskStatus } from "@/lib/types";
-import { TASK_STATUSES } from "@/lib/types";
+import type { Project, Task, TaskCategory, TaskStatus } from "@/lib/types";
+import { statusLabel, statusOrder } from "@/lib/taskStatus";
 import { TASK_NAME_PRESETS } from "@/lib/presets";
 import { fmtDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
 import { normalizeAssignees } from "@/lib/assignees";
+import type { TrackEdit } from "@/lib/undo";
 import ComboBox from "./ComboBox";
 import BulkTaskModal from "./BulkTaskModal";
+import TaskNote from "./TaskNote";
 
 // Shared empty selection, so "nothing selected" keeps a stable identity.
 const EMPTY_IDS: Set<number> = new Set();
@@ -35,6 +37,8 @@ export default function ProjectPanel({
   onEdit,
   onEditTask,
   onDeleted,
+  track,
+  categories,
 }: {
   project: Project;
   people: string[];
@@ -42,6 +46,8 @@ export default function ProjectPanel({
   onEdit: () => void;
   onEditTask: (task: Task) => void;
   onDeleted: () => void;
+  track: TrackEdit;
+  categories: TaskCategory[];
 }) {
   const { t, lang, locale } = useLang();
   const today = todayStr();
@@ -151,13 +157,13 @@ export default function ProjectPanel({
       !confirm(t("confirmComplete", { name: p.name, n: String(openCount) }))
     )
       return;
-    await api(`/api/projects/${p.id}/complete`, "POST");
+    await track(() => api(`/api/projects/${p.id}/complete`, "POST"));
     onChanged();
   }
 
   async function deleteProject() {
     if (!confirm(t("confirmDelete", { name: p.name }))) return;
-    await api(`/api/projects/${p.id}`, "DELETE");
+    await track(() => api(`/api/projects/${p.id}`, "DELETE"));
     onDeleted();
   }
 
@@ -203,7 +209,7 @@ export default function ProjectPanel({
       {/* progress meter */}
       {progress !== null && (
         <div className="mt-4 max-w-md">
-          <div className="flex justify-between text-[13px] text-ink-2">
+          <div className="flex justify-between text-[16px] text-ink-2">
             <span>{t("taskProgress")}</span>
             <span className="font-medium text-ink">
               {doneTasks}/{p.tasks.length} {t("doneWord")}
@@ -242,9 +248,10 @@ export default function ProjectPanel({
                     type="checkbox"
                     checked={!!m.done}
                     onChange={async (e) => {
-                      await api(`/api/milestones/${m.id}`, "PATCH", {
-                        done: e.target.checked,
-                      });
+                      const done = e.target.checked;
+                      await track(() =>
+                        api(`/api/milestones/${m.id}`, "PATCH", { done })
+                      );
                       onChanged();
                     }}
                     aria-label={`${t("markDone")} ${m.name}`}
@@ -255,7 +262,7 @@ export default function ProjectPanel({
                     {m.name}
                   </span>
                   <span
-                    className={`text-[13px] ${
+                    className={`text-[16px] ${
                       overdue
                         ? "font-medium text-[var(--status-critical)]"
                         : "text-ink-2"
@@ -268,7 +275,9 @@ export default function ProjectPanel({
                     className="invisible text-ink-3 hover:text-[var(--status-critical)] group-hover:visible"
                     aria-label={`${t("deleteMilestone")} ${m.name}`}
                     onClick={async () => {
-                      await api(`/api/milestones/${m.id}`, "DELETE");
+                      await track(() =>
+                        api(`/api/milestones/${m.id}`, "DELETE")
+                      );
                       onChanged();
                     }}
                   >
@@ -309,7 +318,7 @@ export default function ProjectPanel({
               {t("tasks")}
             </h3>
             {p.tasks.length > 0 && (
-              <label className="flex items-center gap-2 text-[13px] text-ink-3">
+              <label className="flex items-center gap-2 text-[16px] text-ink-3">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -329,12 +338,12 @@ export default function ProjectPanel({
 
           {selectedTasks.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-edge px-2 py-1.5">
-              <span className="text-[13px] font-medium">
+              <span className="text-[16px] font-medium">
                 {t("nSelected", { n: String(selectedTasks.length) })}
               </span>
               <button
                 type="button"
-                className="btn ml-auto py-1 text-[13px]"
+                className="btn ml-auto py-1 text-[16px]"
                 disabled={copying}
                 onClick={() =>
                   copyToDeliverables(selectedTasks.map((task) => task.id))
@@ -344,14 +353,14 @@ export default function ProjectPanel({
               </button>
               <button
                 type="button"
-                className="btn btn-primary py-1 text-[13px]"
+                className="btn btn-primary py-1 text-[16px]"
                 onClick={() => setSelection(selectedIds, true)}
               >
                 {t("bulkEdit")}
               </button>
               <button
                 type="button"
-                className="btn py-1 text-[13px]"
+                className="btn py-1 text-[16px]"
                 onClick={() => setSelection(EMPTY_IDS)}
               >
                 {t("clearSelection")}
@@ -360,7 +369,7 @@ export default function ProjectPanel({
           )}
 
           {copyResult && (
-            <p className="mt-2 px-2 text-[13px] text-ink-2">{copyResult}</p>
+            <p className="mt-2 px-2 text-[16px] text-ink-2">{copyResult}</p>
           )}
 
           <ul className="mt-2 space-y-1">
@@ -370,7 +379,7 @@ export default function ProjectPanel({
               return (
                 <li
                   key={task.id}
-                  className="group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-[var(--gridline)]/40"
+                  className="group flex flex-wrap items-center gap-x-3 rounded-lg px-2 py-1.5 hover:bg-[var(--gridline)]/40"
                 >
                   <input
                     type="checkbox"
@@ -379,19 +388,20 @@ export default function ProjectPanel({
                     onChange={(e) => toggleTask(task.id, e.target.checked)}
                   />
                   <select
-                    className="px-1.5 py-0.5 text-[12px]"
+                    className="px-1.5 py-0.5 text-[15px]"
                     value={task.status}
                     aria-label={`${t("statusOf")} ${task.name}`}
                     onChange={async (e) => {
-                      await api(`/api/tasks/${task.id}`, "PATCH", {
-                        status: e.target.value as TaskStatus,
-                      });
+                      const status = e.target.value as TaskStatus;
+                      await track(() =>
+                        api(`/api/tasks/${task.id}`, "PATCH", { status })
+                      );
                       onChanged();
                     }}
                   >
-                    {TASK_STATUSES.map((s) => (
+                    {statusOrder(categories).map((s) => (
                       <option key={s} value={s}>
-                        {t(`tstatus_${s}`)}
+                        {statusLabel(s, categories, t)}
                       </option>
                     ))}
                   </select>
@@ -406,13 +416,13 @@ export default function ProjectPanel({
                     {task.name}
                   </button>
                   {task.assignee && (
-                    <span className="text-[13px] text-ink-2">
+                    <span className="text-[16px] text-ink-2">
                       {task.assignee}
                     </span>
                   )}
                   {(task.start_date || task.end_date) && (
                     <span
-                      className={`text-[13px] ${
+                      className={`text-[16px] ${
                         overdue
                           ? "font-medium text-[var(--status-critical)]"
                           : "text-ink-3"
@@ -429,12 +439,20 @@ export default function ProjectPanel({
                     className="invisible text-ink-3 hover:text-[var(--status-critical)] group-hover:visible"
                     aria-label={`${t("deleteTask")} ${task.name}`}
                     onClick={async () => {
-                      await api(`/api/tasks/${task.id}`, "DELETE");
+                      await track(() =>
+                        api(`/api/tasks/${task.id}`, "DELETE")
+                      );
                       onChanged();
                     }}
                   >
                     ✕
                   </button>
+                  {/* Its own line: the dates leave the name column too narrow. */}
+                  {task.note && (
+                    <div className="basis-full pl-7">
+                      <TaskNote note={task.note} />
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -493,6 +511,7 @@ export default function ProjectPanel({
             setSelection(EMPTY_IDS);
             onChanged();
           }}
+          track={track}
         />
       )}
     </div>

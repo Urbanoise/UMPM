@@ -103,7 +103,7 @@ export default function ProjectHealth({
       y: cy,
       body: (
         <div>
-          <div className="text-[13px] font-semibold">{p.name}</div>
+          <div className="text-[16px] font-semibold">{p.name}</div>
           <div className="mt-1 space-y-0.5 text-ink-2">
             <div>{t(`status_${p.status}`)}</div>
             <div>
@@ -191,11 +191,11 @@ export default function ProjectHealth({
               onFocus={(e) => showTip(e, row)}
               onBlur={() => setTip(null)}
             >
-              <div className="flex w-40 shrink-0 items-center gap-1.5">
-                <span className="truncate text-[13px]">{p.name}</span>
+              <div className="flex w-48 shrink-0 items-center gap-1.5">
+                <span className="truncate text-[16px]">{p.name}</span>
                 {row.behind && (
                   <span
-                    className="shrink-0 rounded px-1 py-px text-[10px] font-semibold text-white"
+                    className="shrink-0 rounded px-1 py-px text-[13px] font-semibold text-white"
                     style={{ background: "var(--status-critical)" }}
                   >
                     {t("behindBadge")}
@@ -227,7 +227,7 @@ export default function ProjectHealth({
                   }}
                 />
               </div>
-              <div className="w-10 shrink-0 text-right text-[13px] font-medium tabular-nums">
+              <div className="w-10 shrink-0 text-right text-[16px] font-medium tabular-nums">
                 {row.done !== null ? `${Math.round(row.done * 100)}%` : "—"}
               </div>
             </div>

@@ -70,6 +70,16 @@
 }
 
 @theme inline {
+  /* one step up from Tailwind's defaults: the dashboard is dense, and 12px/14px
+     was too small to read comfortably */
+  --text-xs: 14px;
+  --text-xs--line-height: 19px;
+  --text-sm: 16px;
+  --text-sm--line-height: 23px;
+  --text-lg: 19px;
+  --text-lg--line-height: 28px;
+  --text-2xl: 25px;
+  --text-2xl--line-height: 32px;
   --color-page: var(--page);
   --color-surface: var(--surface-1);
   --color-ink: var(--text-primary);
@@ -83,6 +93,7 @@
 }
 
 body {
+  font-size: 17px;
   background: var(--page);
   color: var(--text-primary);
   font-family: var(--font-noto-sans), var(--font-noto-sans-georgian), system-ui,
@@ -139,7 +150,7 @@ textarea {
   border: 1px solid var(--baseline);
   border-radius: 8px;
   padding: 6px 10px;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-primary);
 }
 
@@ -154,7 +165,7 @@ button:focus-visible {
 .btn {
   border-radius: 8px;
   padding: 6px 14px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   cursor: pointer;
   border: 1px solid var(--border);

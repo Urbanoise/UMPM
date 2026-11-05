@@ -84,3 +84,31 @@ export function addDays(d: Date, days: number): Date {
   out.setDate(out.getDate() + days);
   return out;
 }
+
+/** YYYY-MM-DD from a year, a 0-based month and a day of the month. */
+export function ymd(y: number, m: number, d: number): string {
+  return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Days of a month laid out Monday-first, null for the blanks before the 1st. */
+export function monthCells(year: number, month: number): (number | null)[] {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // 0 = Monday
+  return [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+}
+
+/** A YYYY-MM-DD date moved by whole days, in local time. */
+export function shiftDate(s: string, days: number): string {
+  const d = addDays(parseDate(s), days);
+  return ymd(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Whole days from `from` to `to`; negative when `to` is earlier. */
+export function daysBetween(from: string, to: string): number {
+  return Math.round(
+    (parseDate(to).getTime() - parseDate(from).getTime()) / 86_400_000
+  );
+}

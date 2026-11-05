@@ -41,11 +41,14 @@ export async function queryOne<T>(
 /**
  * Send several statements as a single non-interactive transaction — one round
  * trip, all-or-nothing. The statements cannot depend on each other's results.
+ * Returns the rows of each statement, in order.
  */
 export async function transaction(
   statements: { text: string; params?: unknown[] }[]
-): Promise<void> {
-  if (statements.length === 0) return;
+): Promise<unknown[][]> {
+  if (statements.length === 0) return [];
   const sql = getSql();
-  await sql.transaction(statements.map((s) => sql.query(s.text, s.params ?? [])));
+  return (await sql.transaction(
+    statements.map((s) => sql.query(s.text, s.params ?? []))
+  )) as unknown[][];
 }

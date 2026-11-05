@@ -6,6 +6,8 @@ import { PROJECT_STATUSES } from "@/lib/types";
 import { fmtShortDate, todayStr } from "@/lib/dates";
 import { useLang, type StrKey } from "@/lib/i18n";
 import { splitAssignees } from "@/lib/assignees";
+import { isStarted } from "@/lib/taskStatus";
+import { reassigned } from "@/lib/workItems";
 import ProjectFilter from "./ProjectFilter";
 
 // Task segments encode urgency rather than the raw status column: anything
@@ -45,6 +47,7 @@ type Entry = { task: Task; project: Project; seg: SegKey };
 type Row = {
   key: string;
   label: string;
+  person?: string | null; // when grouped by person; null is the unassigned row
   muted?: boolean;
   dotColor?: string;
   counts: Counts;
@@ -60,7 +63,7 @@ function seriesVar(slot: number) {
 function segOf(task: Task, today: string): SegKey {
   if (task.status === "done") return "done";
   if (task.end_date && task.end_date < today) return "overdue";
-  if (task.status === "in-progress") return "inProgress";
+  if (isStarted(task.status)) return "inProgress";
   return "todo";
 }
 
@@ -82,12 +85,14 @@ export default function WorkOverview({
   onFilter,
   onSelect,
   onEditTask,
+  onReassign,
 }: {
   projects: Project[];
   filterIds: Set<number>;
   onFilter: (ids: Set<number>) => void;
   onSelect: (id: number) => void;
   onEditTask: (task: Task) => void;
+  onReassign: (task: Task, assignee: string) => void;
 }) {
   const { t, locale } = useLang();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -95,6 +100,10 @@ export default function WorkOverview({
   const [showDone, setShowDone] = useState(true);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [tip, setTip] = useState<Tip | null>(null);
+  const [dragging, setDragging] = useState<{ task: Task; from: Row } | null>(
+    null
+  );
+  const [overKey, setOverKey] = useState<string | null>(null);
   const today = todayStr();
 
   // The dropdown offers whatever the show-completed switch lets through; the
@@ -156,6 +165,7 @@ export default function WorkOverview({
         for (const person of persons) {
           bucket(person ?? " unassigned", () => ({
             label: person ?? "",
+            person,
             muted: person === null,
           })).entries.push(e);
         }
@@ -267,13 +277,13 @@ export default function WorkOverview({
     return (
       <div>
         <div className="flex items-center gap-3">
-          <div className="w-24 shrink-0 text-[13px]">{label}</div>
+          <div className="w-24 shrink-0 text-[16px]">{label}</div>
           {total === 0 ? (
             <div className="flex-1 text-xs text-ink-3">—</div>
           ) : (
             bar(segs, "100%", total)
           )}
-          <div className="w-6 shrink-0 text-right text-[13px] font-medium tabular-nums">
+          <div className="w-6 shrink-0 text-right text-[16px] font-medium tabular-nums">
             {total}
           </div>
         </div>
@@ -311,7 +321,7 @@ export default function WorkOverview({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <select
-            className="px-1.5 py-0.5 text-[12px]"
+            className="px-1.5 py-0.5 text-[15px]"
             value={groupBy}
             aria-label={t("groupBy")}
             onChange={(e) => {
@@ -347,8 +357,44 @@ export default function WorkOverview({
             <ul>
               {rows.map((row) => {
                 const open = openKey === row.key;
+                const canDrop = dragging !== null && dragging.from.key !== row.key;
                 return (
-                  <li key={row.key}>
+                  <li
+                    key={row.key}
+                    data-overview-row={row.key}
+                    className="rounded-md"
+                    style={
+                      canDrop && overKey === row.key
+                        ? { boxShadow: "inset 0 0 0 2px var(--accent)" }
+                        : undefined
+                    }
+                    onDragOver={(e) => {
+                      if (!canDrop) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setOverKey(row.key);
+                    }}
+                    onDragLeave={(e) => {
+                      if (
+                        !e.currentTarget.contains(e.relatedTarget as Node | null)
+                      )
+                        setOverKey(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragging && canDrop)
+                        onReassign(
+                          dragging.task,
+                          reassigned(
+                            dragging.task.assignee,
+                            dragging.from.person ?? null,
+                            row.person ?? null
+                          )
+                        );
+                      setDragging(null);
+                      setOverKey(null);
+                    }}
+                  >
                     <button
                       className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-[var(--gridline)]"
                       aria-expanded={open}
@@ -380,7 +426,7 @@ export default function WorkOverview({
                           />
                         )}
                         <span
-                          className={`truncate text-[13px] ${
+                          className={`truncate text-[16px] ${
                             row.muted ? "italic text-ink-3" : ""
                           }`}
                           title={row.muted ? t("unassigned") : row.label}
@@ -400,7 +446,7 @@ export default function WorkOverview({
                           </span>
                         ) : null}
                       </span>
-                      <span className="w-6 shrink-0 text-right text-[13px] font-medium tabular-nums">
+                      <span className="w-6 shrink-0 text-right text-[16px] font-medium tabular-nums">
                         {row.total}
                       </span>
                     </button>
@@ -411,7 +457,23 @@ export default function WorkOverview({
                         className="mb-1 ml-3 space-y-0.5 border-l border-edge pl-3"
                       >
                         {row.entries.map(({ task, project, seg }) => (
-                          <li key={task.id}>
+                          <li
+                            key={task.id}
+                            draggable={groupBy === "person"}
+                            style={{
+                              opacity: dragging?.task.id === task.id ? 0.5 : 1,
+                            }}
+                            onDragStart={(e) => {
+                              e.dataTransfer.effectAllowed = "move";
+                              e.dataTransfer.setData("text/plain", task.name);
+                              setTip(null);
+                              setDragging({ task, from: row });
+                            }}
+                            onDragEnd={() => {
+                              setDragging(null);
+                              setOverKey(null);
+                            }}
+                          >
                             <button
                               className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-[var(--gridline)]"
                               onClick={() => {
@@ -432,7 +494,7 @@ export default function WorkOverview({
                                 aria-hidden
                               />
                               <span
-                                className={`min-w-0 flex-1 truncate text-[13px] ${
+                                className={`min-w-0 flex-1 truncate text-[16px] ${
                                   seg === "done" ? "text-ink-3 line-through" : ""
                                 }`}
                               >
@@ -465,7 +527,9 @@ export default function WorkOverview({
                 );
               })}
             </ul>
-            <p className="mt-2 px-1 text-xs text-ink-3">{t("overviewHint")}</p>
+            <p className="mt-2 px-1 text-xs text-ink-3">
+              {t(groupBy === "person" ? "overviewDragHint" : "overviewHint")}
+            </p>
           </div>
         )}
 

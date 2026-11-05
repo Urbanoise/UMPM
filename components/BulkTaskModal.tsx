@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Task } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 import { normalizeAssignees } from "@/lib/assignees";
+import type { TrackEdit } from "@/lib/undo";
 import ComboBox from "./ComboBox";
 
 // Applies one start date, end date and/or assignee to every selected task.
@@ -14,11 +15,13 @@ export default function BulkTaskModal({
   people,
   onClose,
   onSaved,
+  track,
 }: {
   tasks: Task[];
   people: string[];
   onClose: () => void;
   onSaved: () => void;
+  track: TrackEdit;
 }) {
   const { t } = useLang();
   const [applyStart, setApplyStart] = useState(false);
@@ -55,16 +58,18 @@ export default function BulkTaskModal({
       return;
     }
     setSaving(true);
-    const res = await fetch("/api/tasks", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ids: tasks.map((task) => task.id),
-        ...(applyStart ? { start_date: startDate } : {}),
-        ...(applyEnd ? { end_date: endDate } : {}),
-        ...(applyAssignee ? { assignee: normalizeAssignees(assignee) } : {}),
-      }),
-    });
+    const res = await track(() =>
+      fetch("/api/tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: tasks.map((task) => task.id),
+          ...(applyStart ? { start_date: startDate } : {}),
+          ...(applyEnd ? { end_date: endDate } : {}),
+          ...(applyAssignee ? { assignee: normalizeAssignees(assignee) } : {}),
+        }),
+      })
+    );
     setSaving(false);
     if (!res.ok) {
       setError(t("errSave"));
@@ -87,7 +92,7 @@ export default function BulkTaskModal({
         <p className="mt-1 text-sm text-ink-2">
           {t("nSelected", { n: String(tasks.length) })}
         </p>
-        <ul className="mt-2 max-h-24 overflow-y-auto text-[13px] text-ink-3">
+        <ul className="mt-2 max-h-24 overflow-y-auto text-[16px] text-ink-3">
           {tasks.map((task) => (
             <li key={task.id} className="truncate">
               {task.name}
@@ -95,7 +100,7 @@ export default function BulkTaskModal({
           ))}
         </ul>
 
-        <p className="mt-4 text-[13px] text-ink-2">{t("bulkHint")}</p>
+        <p className="mt-4 text-[16px] text-ink-2">{t("bulkHint")}</p>
 
         <div className="mt-3 space-y-3">
           <div className="flex items-center gap-3">

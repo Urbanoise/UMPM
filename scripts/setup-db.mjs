@@ -55,7 +55,16 @@ await sql`
     start_date TEXT,
     end_date   TEXT,
     status     TEXT NOT NULL DEFAULT 'todo',
-    assignee   TEXT
+    assignee   TEXT,
+    note       TEXT
+  )
+`;
+// CREATE TABLE IF NOT EXISTS leaves a table from before this column as it was.
+await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS note TEXT`;
+await sql`
+  CREATE TABLE IF NOT EXISTS task_categories (
+    id   SERIAL PRIMARY KEY,
+    name TEXT NOT NULL
   )
 `;
 console.log("schema ready");

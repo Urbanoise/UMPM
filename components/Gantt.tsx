@@ -7,18 +7,31 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Milestone, Project, Task } from "@/lib/types";
-import { fmtDate, parseDate, todayStr } from "@/lib/dates";
+import type { Milestone, Project, Task, TaskCategory } from "@/lib/types";
+import { isStarted, statusLabel } from "@/lib/taskStatus";
+import { fmtDate, parseDate, todayStr, shiftDate } from "@/lib/dates";
+import {
+  shiftedProject,
+  withDeliverableDate,
+  withTaskChange,
+} from "@/lib/workItems";
 import { useLang } from "@/lib/i18n";
+import { fit } from "@/lib/exportGantt";
+import {
+  clampColumns,
+  DEFAULT_GANTT_COLUMNS,
+  useGanttColumns,
+  type GanttColumns,
+} from "@/lib/ganttColumns";
 
 const TOP = 36; // axis header height
 const ROW_H = 44;
 const BAR_H = 16;
 const TASK_ROW_H = 30; // sub-row for a task of the expanded project
 const TASK_BAR_H = 10;
-const GUTTER = 180; // left label column
 const RIGHT_PAD = 20;
 const DAY = 86_400_000;
+const RESIZE_KEY_STEP = 8; // px per arrow key press on a column divider
 
 type Tip = { x: number; y: number; body: ReactNode };
 
@@ -40,23 +53,106 @@ function fmtTick(d: Date, locale: string) {
 }
 
 type Drag = { id: number; fromIndex: number; y: number; overIndex: number };
+type Resize = { key: keyof GanttColumns; startX: number; start: GanttColumns };
+
+type BarMode = "move" | "start" | "end";
+type BarTarget =
+  | { kind: "project"; projectId: number }
+  | { kind: "task"; projectId: number; task: Task }
+  | { kind: "milestone"; projectId: number; milestone: Milestone };
+type BarDrag = {
+  target: BarTarget;
+  mode: BarMode;
+  startX: number;
+  days: number;
+};
+
+const EDGE_PX = 6; // how close to a bar's end counts as grabbing that edge
+const MIN_RESIZE_PX = 24; // narrower bars can only be moved
+
+const earlier = (a: string, b: string) => (a < b ? a : b);
+const later = (a: string, b: string) => (a > b ? a : b);
+
+function resizedTask(task: Task, mode: BarMode, days: number) {
+  const { start_date: start, end_date: end } = task;
+  if (mode === "move") {
+    return {
+      start_date: start && shiftDate(start, days),
+      end_date: end && shiftDate(end, days),
+    };
+  }
+  if (mode === "start") {
+    const moved = shiftDate((start ?? end)!, days);
+    return { start_date: end ? earlier(moved, end) : moved, end_date: end };
+  }
+  const moved = shiftDate((end ?? start)!, days);
+  return { start_date: start, end_date: start ? later(moved, start) : moved };
+}
+
+/** `p` as it will be once the drag lands, so the chart previews the result. */
+function withBarDrag(p: Project, bar: BarDrag | null): Project {
+  if (!bar || bar.days === 0 || bar.target.projectId !== p.id) return p;
+  const { target, mode, days } = bar;
+  if (target.kind === "task") {
+    return withTaskChange(p, target.task.id, resizedTask(target.task, mode, days));
+  }
+  if (target.kind === "milestone") {
+    const { milestone } = target;
+    return withDeliverableDate(p, milestone, shiftDate(milestone.due_date, days));
+  }
+  if (mode === "move") return shiftedProject(p, days);
+  return mode === "start"
+    ? { ...p, start_date: earlier(shiftDate(p.start_date, days), p.end_date) }
+    : { ...p, end_date: later(shiftDate(p.end_date, days), p.start_date) };
+}
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+
+/** `s` cut with an ellipsis to fit `maxW` pixels in the page's own font. */
+function fitText(s: string, maxW: number, size: number, weight = 400) {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return s;
+  const family = getComputedStyle(document.body).fontFamily;
+  measureCtx.font = `${weight} ${size}px ${family}`;
+  return fit(measureCtx, s, maxW);
+}
 
 export default function Gantt({
   projects,
   selectedId,
   onSelect,
   onReorder,
+  onMoveProject,
+  onResizeProject,
+  onChangeTask,
+  categories,
+  onMoveDeliverable,
 }: {
   projects: Project[];
   selectedId: number | null;
   onSelect: (id: number) => void;
   onReorder?: (orderedIds: number[]) => void;
+  onMoveProject: (project: Project, days: number) => void;
+  onResizeProject: (project: Project, start: string, end: string) => void;
+  onChangeTask: (task: Task, fields: Partial<Task>) => void;
+  categories: TaskCategory[];
+  onMoveDeliverable: (milestone: Milestone, date: string) => void;
 }) {
   const { t, locale } = useLang();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(960);
   const [tip, setTip] = useState<Tip | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [bar, setBar] = useState<BarDrag | null>(null);
+  // Releasing a drag also fires a click, which must not select the project.
+  const dragged = useRef(false);
+  const { columns: savedColumns, setColumns } = useGanttColumns();
+  const [liveColumns, setLiveColumns] = useState<GanttColumns | null>(null);
+  const [resizing, setResizing] = useState<Resize | null>(null);
+  const [activeDivider, setActiveDivider] = useState<keyof GanttColumns | null>(
+    null
+  );
+  const [, setFontEpoch] = useState(0);
   const today = todayStr();
   const todayMs = parseDate(today).getTime();
 
@@ -64,10 +160,18 @@ export default function Gantt({
     const el = wrapRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      setWidth(Math.max(560, entries[0].contentRect.width));
+      setWidth(Math.max(680, entries[0].contentRect.width));
     });
     ro.observe(el);
     return () => ro.disconnect();
+  }, []);
+
+  // names are fitted by measuring them, so re-render once the real fonts arrive
+  useEffect(() => {
+    const bump = () => setFontEpoch((n) => n + 1);
+    document.fonts.ready.then(bump);
+    document.fonts.addEventListener("loadingdone", bump);
+    return () => document.fonts.removeEventListener("loadingdone", bump);
   }, []);
 
   const { t0, t1 } = useMemo(() => {
@@ -95,13 +199,17 @@ export default function Gantt({
     return { t0: min - pad, t1: max + pad };
   }, [projects, todayMs]);
 
-  const chartW = width - GUTTER - RIGHT_PAD;
+  const columns = clampColumns(liveColumns ?? savedColumns, width, RIGHT_PAD);
+  const nameW = columns.name;
+  const gutter = columns.name + columns.due; // everything left of the chart area
+  const chartW = width - gutter - RIGHT_PAD;
 
   // the selected project expands to show its dated tasks as sub-rows
   const rows = useMemo(() => {
     const out: { p: Project; tasks: Task[]; yTop: number; h: number }[] = [];
     let yTop = TOP;
-    for (const p of projects) {
+    for (const source of projects) {
+      const p = withBarDrag(source, bar);
       const tasks =
         p.id === selectedId
           ? p.tasks.filter((task) => task.start_date || task.end_date)
@@ -111,10 +219,10 @@ export default function Gantt({
       yTop += h;
     }
     return out;
-  }, [projects, selectedId]);
+  }, [projects, selectedId, bar]);
   const last = rows[rows.length - 1];
   const height = (last ? last.yTop + last.h : TOP) + 12;
-  const x = (t: number) => GUTTER + ((t - t0) / (t1 - t0)) * chartW;
+  const x = (t: number) => gutter + ((t - t0) / (t1 - t0)) * chartW;
 
   // pointer coordinate → insertion index among the project rows
   function insertIndexAtY(clientY: number) {
@@ -168,6 +276,103 @@ export default function Gantt({
     onReorder?.(ids);
   }
 
+  // which part of a bar spanning x0..x1 the pointer is over, if any
+  function zoneAt(e: React.PointerEvent, x0: number, x1: number): BarMode | null {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const px = e.clientX - rect.left;
+    if (px < x0 - EDGE_PX || px > x1 + EDGE_PX) return null;
+    if (x1 - x0 < MIN_RESIZE_PX) return "move";
+    if (px <= x0 + EDGE_PX) return "start";
+    return px >= x1 - EDGE_PX ? "end" : "move";
+  }
+
+  function showBarCursor(
+    e: React.PointerEvent,
+    x0: number,
+    x1: number,
+    fallback: string
+  ) {
+    if (bar) return;
+    const zone = zoneAt(e, x0, x1);
+    (e.currentTarget as SVGElement).style.cursor =
+      zone === "move" ? "grab" : zone ? "ew-resize" : fallback;
+  }
+
+  // Touch keeps meaning tap and scroll; bars are dragged with a mouse or pen.
+  function beginBar(e: React.PointerEvent, target: BarTarget, mode: BarMode | null) {
+    dragged.current = false;
+    if (!mode || e.pointerType === "touch" || e.button !== 0) return;
+    e.preventDefault();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    setBar({ target, mode, startX: e.clientX, days: 0 });
+  }
+
+  function moveBar(e: React.PointerEvent) {
+    if (!bar) return;
+    const pxPerDay = chartW / ((t1 - t0) / DAY);
+    const days = Math.round((e.clientX - bar.startX) / pxPerDay);
+    if (days !== bar.days) setBar({ ...bar, days });
+  }
+
+  function endBar(e: React.PointerEvent) {
+    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
+    if (!bar) return;
+    setBar(null);
+    if (bar.days === 0) return;
+    dragged.current = true;
+    const { target, mode, days } = bar;
+    const project = projects.find((p) => p.id === target.projectId);
+    if (!project) return;
+    if (target.kind === "task") {
+      onChangeTask(target.task, resizedTask(target.task, mode, days));
+    } else if (target.kind === "milestone") {
+      const { milestone } = target;
+      onMoveDeliverable(milestone, shiftDate(milestone.due_date, days));
+    } else if (mode === "move") {
+      onMoveProject(project, days);
+    } else {
+      const next = withBarDrag(project, bar);
+      onResizeProject(project, next.start_date, next.end_date);
+    }
+  }
+
+  function beginResize(e: React.PointerEvent, key: keyof GanttColumns) {
+    e.preventDefault();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    setTip(null);
+    setResizing({ key, startX: e.clientX, start: columns });
+  }
+
+  function moveResize(e: React.PointerEvent) {
+    if (!resizing) return;
+    const { key, startX, start } = resizing;
+    setLiveColumns(
+      clampColumns(
+        { ...start, [key]: start[key] + e.clientX - startX },
+        width,
+        RIGHT_PAD
+      )
+    );
+  }
+
+  // saved only on release, so a drag is not a localStorage write per pixel
+  function endResize(e: React.PointerEvent) {
+    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
+    if (liveColumns) setColumns(liveColumns);
+    setLiveColumns(null);
+    setResizing(null);
+  }
+
+  function resizeByKey(e: React.KeyboardEvent, key: keyof GanttColumns) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const step = e.key === "ArrowLeft" ? -RESIZE_KEY_STEP : RESIZE_KEY_STEP;
+    setColumns(
+      clampColumns({ ...columns, [key]: columns[key] + step }, width, RIGHT_PAD)
+    );
+  }
+
   const weeks = useMemo(() => {
     const out: { t: number; label: string }[] = [];
     const d = new Date(t0);
@@ -185,7 +390,9 @@ export default function Gantt({
     }
     return out;
   }, [t0, t1, locale]);
-  const labelStep = Math.max(1, Math.ceil(weeks.length / 14));
+  // at most 14 labels, fewer when the chart is too narrow to fit them
+  const labelSlots = Math.max(2, Math.min(14, Math.floor(chartW / 92)));
+  const labelStep = Math.max(1, Math.ceil(weeks.length / labelSlots));
 
   // first-of-month boundaries — the primary vertical rhythm
   const months = useMemo(() => {
@@ -223,7 +430,7 @@ export default function Gantt({
     const done = p.tasks.filter((task) => task.status === "done").length;
     return (
       <div>
-        <div className="font-semibold text-[13px]">{p.name}</div>
+        <div className="font-semibold text-[16px]">{p.name}</div>
         <div className="mt-1 text-ink-2">
           <span className="font-medium text-ink">
             {fmtDate(p.start_date, locale)}
@@ -256,7 +463,7 @@ export default function Gantt({
     const overdue = !m.done && m.due_date < today;
     return (
       <div>
-        <div className="font-semibold text-[13px]">◆ {m.name}</div>
+        <div className="font-semibold text-[16px]">◆ {m.name}</div>
         <div className="mt-1 text-ink-2">
           <span className="font-medium text-ink">
             {fmtDate(m.due_date, locale)}
@@ -278,7 +485,7 @@ export default function Gantt({
       task.status !== "done" && task.end_date !== null && task.end_date < today;
     return (
       <div>
-        <div className="font-semibold text-[13px]">{task.name}</div>
+        <div className="font-semibold text-[16px]">{task.name}</div>
         <div className="mt-1 text-ink-2">
           {task.start_date && (
             <span className="font-medium text-ink">
@@ -297,7 +504,7 @@ export default function Gantt({
         <div
           className={overdue ? "font-medium text-[var(--status-critical)]" : "text-ink-2"}
         >
-          {overdue ? t("msOverdue") : t(`tstatus_${task.status}`)}
+          {overdue ? t("msOverdue") : statusLabel(task.status, categories, t)}
         </div>
         {task.assignee && <div className="text-ink-2">{task.assignee}</div>}
       </div>
@@ -355,7 +562,7 @@ export default function Gantt({
               <text
                 x={x(m.t) + 4}
                 y={18}
-                fontSize={11}
+                fontSize={14}
                 fill="var(--text-muted)"
               >
                 {m.label}
@@ -377,10 +584,21 @@ export default function Gantt({
           />
         ))}
 
+        {/* due date column heading */}
+        <text
+          x={gutter - 10}
+          y={18}
+          textAnchor="end"
+          fontSize={14}
+          fill="var(--text-muted)"
+        >
+          {t("colDue")}
+        </text>
+
         {/* separator under the label gutter */}
         <line
-          x1={GUTTER}
-          x2={GUTTER}
+          x1={gutter}
+          x2={gutter}
           y1={TOP - 8}
           y2={height - 6}
           stroke="var(--baseline)"
@@ -388,7 +606,7 @@ export default function Gantt({
         />
         {/* axis baseline */}
         <line
-          x1={GUTTER}
+          x1={gutter}
           x2={width - RIGHT_PAD}
           y1={TOP - 8}
           y2={TOP - 8}
@@ -443,13 +661,28 @@ export default function Gantt({
                 x={16}
                 y={yMid + 4}
                 textAnchor="start"
-                fontSize={13}
+                fontSize={16}
                 fontWeight={selected ? 600 : 400}
                 fill={finished ? "var(--text-muted)" : "var(--text-primary)"}
                 style={{ cursor: "pointer" }}
                 onClick={() => onSelect(p.id)}
               >
-                {truncate(p.name, 22)}
+                {fitText(p.name, nameW - 24, 16, selected ? 600 : 400)}
+              </text>
+              <text
+                x={gutter - 10}
+                y={yMid + 4}
+                textAnchor="end"
+                fontSize={14.5}
+                fill={
+                  finished
+                    ? "var(--text-muted)"
+                    : p.end_date < today
+                      ? "var(--status-critical)"
+                      : "var(--text-secondary)"
+                }
+              >
+                {fmtDate(p.end_date, locale)}
               </text>
 
               {/* full span, de-emphasised (remaining time) */}
@@ -480,7 +713,7 @@ export default function Gantt({
                     x={x(start) - 4}
                     y={yMid + 3.5}
                     textAnchor="end"
-                    fontSize={9}
+                    fontSize={12}
                     fontWeight={600}
                     fill={color}
                   >
@@ -512,9 +745,25 @@ export default function Gantt({
                 role="button"
                 aria-label={`${p.name}, ${fmtDate(p.start_date, locale)} → ${fmtDate(p.end_date, locale)}`}
                 style={{ cursor: "pointer" }}
-                onClick={() => onSelect(p.id)}
+                onClick={() => {
+                  if (!dragged.current) onSelect(p.id);
+                  dragged.current = false;
+                }}
                 onKeyDown={(e) => e.key === "Enter" && onSelect(p.id)}
-                onPointerMove={(e) => showTip(e, projectTip(p))}
+                onPointerDown={(e) =>
+                  beginBar(
+                    e,
+                    { kind: "project", projectId: p.id },
+                    zoneAt(e, x(start), x(end))
+                  )
+                }
+                onPointerMove={(e) => {
+                  moveBar(e);
+                  showBarCursor(e, x(start), x(end), "pointer");
+                  showTip(e, projectTip(p));
+                }}
+                onPointerUp={endBar}
+                onPointerCancel={() => setBar(null)}
                 onPointerLeave={() => setTip(null)}
                 onFocus={(e) => showTip(e, projectTip(p))}
                 onBlur={() => setTip(null)}
@@ -561,12 +810,29 @@ export default function Gantt({
                     <circle
                       r={13}
                       fill="transparent"
-                      style={{ cursor: "pointer" }}
-                      onClick={() => onSelect(p.id)}
+                      style={{ cursor: bar ? "grabbing" : "grab" }}
+                      onClick={() => {
+                        if (!dragged.current) onSelect(p.id);
+                        dragged.current = false;
+                      }}
+                      onPointerDown={(e) =>
+                        beginBar(
+                          e,
+                          {
+                            kind: "milestone",
+                            projectId: p.id,
+                            milestone: m,
+                          },
+                          "move"
+                        )
+                      }
                       onPointerMove={(e) => {
                         e.stopPropagation();
+                        moveBar(e);
                         showTip(e, milestoneTip(p, m));
                       }}
+                      onPointerUp={endBar}
+                      onPointerCancel={() => setBar(null)}
                       onPointerLeave={() => setTip(null)}
                     />
                   </g>
@@ -589,7 +855,7 @@ export default function Gantt({
                   !done && task.end_date !== null && task.end_date < today;
                 const tSolidUntil = done
                   ? te
-                  : task.status === "in-progress"
+                  : isStarted(task.status)
                     ? Math.min(Math.max(todayMs, ts), te)
                     : ts;
                 return (
@@ -598,10 +864,25 @@ export default function Gantt({
                       x={28}
                       y={tMid + 3.5}
                       textAnchor="start"
-                      fontSize={11.5}
+                      fontSize={14.5}
                       fill="var(--text-secondary)"
                     >
-                      {truncate(task.name, 24)}
+                      {fitText(task.name, nameW - 36, 14.5)}
+                    </text>
+                    <text
+                      x={gutter - 10}
+                      y={tMid + 3.5}
+                      textAnchor="end"
+                      fontSize={14}
+                      fill={
+                        overdue
+                          ? "var(--status-critical)"
+                          : done
+                            ? "var(--text-muted)"
+                            : "var(--text-secondary)"
+                      }
+                    >
+                      {fmtDate(task.end_date, locale)}
                     </text>
                     <rect
                       x={x(ts)}
@@ -642,7 +923,20 @@ export default function Gantt({
                       fill="transparent"
                       tabIndex={0}
                       aria-label={task.name}
-                      onPointerMove={(e) => showTip(e, taskTip(p, task))}
+                      onPointerDown={(e) =>
+                        beginBar(
+                          e,
+                          { kind: "task", projectId: p.id, task },
+                          zoneAt(e, x(ts), x(te))
+                        )
+                      }
+                      onPointerMove={(e) => {
+                        moveBar(e);
+                        showBarCursor(e, x(ts), x(te), "default");
+                        showTip(e, taskTip(p, task));
+                      }}
+                      onPointerUp={endBar}
+                      onPointerCancel={() => setBar(null)}
                       onPointerLeave={() => setTip(null)}
                       onFocus={(e) => showTip(e, taskTip(p, task))}
                       onBlur={() => setTip(null)}
@@ -685,11 +979,11 @@ export default function Gantt({
                   x={16}
                   y={drag.y + 4}
                   textAnchor="start"
-                  fontSize={13}
+                  fontSize={16}
                   fontWeight={600}
                   fill="var(--accent)"
                 >
-                  {truncate(projects[drag.fromIndex]?.name ?? "", 22)}
+                  {fitText(projects[drag.fromIndex]?.name ?? "", nameW - 24, 16, 600)}
                 </text>
               </g>
             );
@@ -707,12 +1001,56 @@ export default function Gantt({
         <text
           x={x(todayMs) + 5}
           y={TOP + 2}
-          fontSize={10}
+          fontSize={13}
           fontWeight={600}
           fill="var(--text-muted)"
         >
           {t("today")}
         </text>
+
+        {/* column dividers — last, so they sit above the row hit targets */}
+        {(["name", "due"] as const).map((key) => {
+          const dx = key === "name" ? nameW : gutter;
+          const active = resizing?.key === key || activeDivider === key;
+          return (
+            <g key={`divider-${key}`}>
+              <line
+                x1={dx}
+                x2={dx}
+                y1={active ? 8 : 10}
+                y2={active ? height - 6 : TOP - 8}
+                stroke={active ? "var(--accent)" : "var(--baseline)"}
+                strokeWidth={active ? 2 : 1}
+                pointerEvents="none"
+              />
+              <rect
+                x={dx - 5}
+                y={0}
+                width={10}
+                height={height}
+                fill="transparent"
+                tabIndex={0}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={`${t("resizeColumn")}: ${t(key === "name" ? "colName" : "colDue")}`}
+                aria-valuenow={columns[key]}
+                style={{ cursor: "col-resize", touchAction: "none", outline: "none" }}
+                onPointerDown={(e) => beginResize(e, key)}
+                onPointerMove={moveResize}
+                onPointerUp={endResize}
+                onPointerCancel={endResize}
+                onPointerEnter={() => setActiveDivider(key)}
+                onPointerLeave={() => setActiveDivider(null)}
+                onFocus={() => setActiveDivider(key)}
+                onBlur={() => setActiveDivider(null)}
+                onKeyDown={(e) => resizeByKey(e, key)}
+                onDoubleClick={() =>
+                  setColumns({ ...columns, [key]: DEFAULT_GANTT_COLUMNS[key] })
+                }
+              />
+            </g>
+          );
+        })}
       </svg>
 
       {tip && (

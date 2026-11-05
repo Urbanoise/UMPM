@@ -30,6 +30,7 @@ export default function ContractUploadModal({
   const [phase, setPhase] = useState<Phase>("pick");
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [dropping, setDropping] = useState(false);
 
   const [draft, setDraft] = useState<ContractDraft | null>(null);
   const [name, setName] = useState("");
@@ -151,6 +152,22 @@ export default function ContractUploadModal({
     <div
       className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4"
       onClick={busy ? undefined : onClose}
+      // The whole overlay catches the drop: a file released just outside the
+      // box would otherwise make the browser navigate away to open it.
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (phase === "pick") setDropping(true);
+        else e.dataTransfer.dropEffect = "none";
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+          setDropping(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDropping(false);
+        if (phase === "pick") pickFile(e.dataTransfer.files[0] ?? null);
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -159,7 +176,12 @@ export default function ContractUploadModal({
         <h2 className="text-lg font-semibold">{t("contractTitle")}</h2>
 
         {phase === "pick" && (
-          <div className="mt-4">
+          <div
+            className="mt-4 rounded-lg border-2 border-dashed p-3"
+            style={{
+              borderColor: dropping ? "var(--accent)" : "var(--baseline)",
+            }}
+          >
             <label className="block text-sm">
               <span className="text-ink-2">{t("contractPick")}</span>
               <input
@@ -169,7 +191,10 @@ export default function ContractUploadModal({
                 onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
               />
             </label>
-            <p className="mt-2 text-xs text-ink-3">
+            <p className="mt-2 text-sm text-ink-2">
+              {file ? file.name : t("contractDrop")}
+            </p>
+            <p className="mt-1 text-xs text-ink-3">
               {t("contractPickHint", { mb: String(MAX_MB) })}
             </p>
           </div>

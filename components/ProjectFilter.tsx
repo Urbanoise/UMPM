@@ -7,7 +7,8 @@ import { useLang } from "@/lib/i18n";
 /**
  * The multi-select project filter shared by the timeline and the two overview
  * panels. Dashboard owns the value, so ticking projects in any one of them
- * narrows all three; an empty set means "all projects". Each panel passes the
+ * narrows all three and the stat tiles; an empty set means "all projects". Each
+ * panel passes the
  * ids it can actually show as `relevant` so its own list never offers an
  * option that filters down to nothing there.
  */
@@ -65,7 +66,7 @@ export default function ProjectFilter({
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        className="btn flex max-w-48 items-center gap-1.5 px-1.5 py-0.5 text-[12px]"
+        className="btn flex max-w-48 items-center gap-1.5 px-1.5 py-0.5 text-[15px]"
         aria-label={t("filterByProject")}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
@@ -99,7 +100,7 @@ export default function ProjectFilter({
           {value.size > 0 && (
             <button
               type="button"
-              className="mt-1 w-full border-t border-edge px-3 py-1.5 text-left text-[13px] text-ink-3 hover:text-ink"
+              className="mt-1 w-full border-t border-edge px-3 py-1.5 text-left text-[16px] text-ink-3 hover:text-ink"
               onClick={() => {
                 onChange(new Set());
                 setOpen(false);

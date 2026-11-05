@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
-import { projectExists } from "@/lib/queries";
-import { TASK_STATUSES } from "@/lib/types";
+import { isTaskStatus, projectExists } from "@/lib/queries";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -23,7 +22,7 @@ export async function POST(req: Request, { params }: Params) {
       name.trim(),
       start_date || null,
       end_date || null,
-      TASK_STATUSES.includes(status) ? status : "todo",
+      (await isTaskStatus(status)) ? status : "todo",
       assignee?.trim() || null,
     ]
   );

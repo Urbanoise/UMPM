@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { syncDeliverablesFromTasks } from "@/lib/queries";
-import { TASK_STATUSES } from "@/lib/types";
+import { isTaskStatus, syncDeliverablesFromTasks } from "@/lib/queries";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,10 +11,11 @@ export async function PATCH(req: Request, { params }: Params) {
   if (body.name !== undefined) fields.name = String(body.name).trim();
   if (body.start_date !== undefined) fields.start_date = body.start_date || null;
   if (body.end_date !== undefined) fields.end_date = body.end_date || null;
-  if (body.status !== undefined && TASK_STATUSES.includes(body.status))
+  if (body.status !== undefined && (await isTaskStatus(body.status)))
     fields.status = body.status;
   if (body.assignee !== undefined)
     fields.assignee = body.assignee?.trim() || null;
+  if (body.note !== undefined) fields.note = body.note?.trim() || null;
   if (Object.keys(fields).length === 0) {
     return NextResponse.json({ error: "no valid fields" }, { status: 400 });
   }

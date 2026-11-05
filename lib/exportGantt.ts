@@ -3,7 +3,8 @@
 // rows). Everything runs in the browser on the projects Dashboard already
 // holds; exceljs and jspdf are imported on demand so they stay out of the main
 // bundle.
-import type { Milestone, Project, Task } from "./types";
+import type { Milestone, Project, Task, TaskCategory } from "./types";
+import { isStarted, statusLabel } from "./taskStatus";
 import type { StrKey } from "./i18n";
 import { fmtDate, fmtMonthShort, parseDate, todayStr } from "./dates";
 import { deliverableNames } from "./linked";
@@ -16,6 +17,7 @@ export type ExportAudience = "client" | "internal";
 export type ExportOptions = {
   includeTasks: boolean;
   audience: ExportAudience;
+  categories: TaskCategory[];
   t: T;
   locale: string;
 };
@@ -74,7 +76,7 @@ function projectSolidUntil(p: Project, todayMs: number) {
 function taskSolidUntil(task: Task, todayMs: number) {
   const [s, e] = taskSpan(task);
   if (task.status === "done") return e + DAY;
-  if (task.status === "in-progress") return Math.min(Math.max(todayMs, s), e + DAY);
+  if (isStarted(task.status)) return Math.min(Math.max(todayMs, s), e + DAY);
   return s;
 }
 
@@ -148,7 +150,7 @@ function excelDate(s: string | null) {
 
 export async function buildXlsx(
   projects: Project[],
-  { includeTasks, audience, t, locale }: ExportOptions
+  { includeTasks, audience, categories, t, locale }: ExportOptions
 ): Promise<Blob> {
   const ExcelJS = (await import("exceljs")).default;
   const today = todayStr();
@@ -329,7 +331,9 @@ export async function buildXlsx(
           indent: true,
           start: task.start_date,
           end: task.end_date,
-          status: overdue ? t("overdueWord") : t(`tstatus_${task.status}`),
+          status: overdue
+            ? t("overdueWord")
+            : statusLabel(task.status, categories, t),
           statusRed: overdue,
           person: task.assignee,
           bar: span
@@ -426,7 +430,7 @@ function paginate(rows: PdfRow[], avail: number): PdfRow[][] {
   return pages;
 }
 
-function fit(ctx: CanvasRenderingContext2D, s: string, maxW: number) {
+export function fit(ctx: CanvasRenderingContext2D, s: string, maxW: number) {
   if (ctx.measureText(s).width <= maxW) return s;
   let lo = 0;
   let hi = s.length;

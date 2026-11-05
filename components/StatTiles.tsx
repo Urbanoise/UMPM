@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Project } from "@/lib/types";
-import { addDays, parseDate, todayStr } from "@/lib/dates";
+import { shiftDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
 
 const COUNT_MS = 700;
@@ -13,9 +13,10 @@ export const PANEL_IDS = {
   health: "panel-health",
   calendar: "panel-calendar",
   deadlines: "panel-deadlines",
+  project: "panel-project",
 } as const;
 
-function prefersReducedMotion() {
+export function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
@@ -85,7 +86,7 @@ function Tile({
       className="stat-tile card group flex-1 cursor-pointer px-4 py-3 text-left"
       style={hot ? { borderColor: "var(--status-critical)" } : undefined}
     >
-      <div className="flex items-start justify-between gap-2 text-[13px] text-ink-2">
+      <div className="flex items-start justify-between gap-2 text-[16px] text-ink-2">
         <span>{label}</span>
         <span
           className="translate-x-[-4px] opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
@@ -118,15 +119,23 @@ function Tile({
   );
 }
 
-export default function StatTiles({ projects }: { projects: Project[] }) {
+export default function StatTiles({
+  projects,
+  allProjects,
+}: {
+  projects: Project[]; // what the project filter leaves
+  allProjects: Project[];
+}) {
   const { t } = useLang();
   const today = todayStr();
-  const in30 = addDays(parseDate(today), 30).toISOString().slice(0, 10);
+  const in30 = shiftDate(today, 30);
 
   const active = projects.filter((p) => p.status === "active").length;
   // "Ongoing" is everything not finished — the same rows the timeline shows
-  // while past projects are hidden.
-  const ongoing = projects.filter((p) => p.status !== "done").length;
+  // while past projects are hidden. With no filter, all of them are selected.
+  const isOngoing = (p: Project) => p.status !== "done";
+  const selected = projects.filter(isOngoing).length;
+  const ongoing = allProjects.filter(isOngoing).length;
   const upcomingMilestones = projects
     .flatMap((p) => p.milestones)
     .filter((m) => !m.done && m.due_date >= today && m.due_date <= in30).length;
@@ -145,8 +154,8 @@ export default function StatTiles({ projects }: { projects: Project[] }) {
     <div className="flex flex-wrap gap-3">
       <Tile
         label={t("statProjectsOngoing")}
-        value={ongoing}
-        total={projects.length}
+        value={selected}
+        total={ongoing}
         targets={[PANEL_IDS.gantt]}
       />
       <Tile

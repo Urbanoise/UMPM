@@ -1,4 +1,5 @@
 import { query, queryOne } from "./db";
+import { TASK_STATUSES, categoryIdOf } from "./types";
 import type { Milestone, Project, Task } from "./types";
 
 type ProjectRow = Omit<Project, "milestones" | "tasks">;
@@ -21,6 +22,26 @@ export async function getAllProjects(): Promise<Project[]> {
 
 export async function projectExists(id: number): Promise<boolean> {
   return !!(await queryOne("SELECT 1 FROM projects WHERE id = $1", [id]));
+}
+
+/** A built-in status, or a custom category that still exists. */
+export async function isTaskStatus(status: unknown): Promise<boolean> {
+  if ((TASK_STATUSES as unknown[]).includes(status)) return true;
+  const id = categoryIdOf(status);
+  if (id === null) return false;
+  return !!(await queryOne("SELECT 1 FROM task_categories WHERE id = $1", [id]));
+}
+
+/**
+ * Undo can write a task back into a category a colleague has deleted since. A
+ * task with no matching column would vanish from the board, so it goes to "todo".
+ */
+export async function rehomeOrphanedTasks() {
+  await query(
+    `UPDATE tasks SET status = 'todo'
+      WHERE status LIKE 'cat-%'
+        AND status NOT IN (SELECT 'cat-' || id FROM task_categories)`
+  );
 }
 
 // Tasks and deliverables that share a name within a project are one commitment

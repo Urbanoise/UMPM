@@ -11,8 +11,8 @@ const STRINGS = {
 
   statProjects: { ka: "პროექტები", en: "Projects" },
   statProjectsOngoing: {
-    ka: "პროექტები: მიმდინარე / ყველა",
-    en: "Projects: ongoing / all",
+    ka: "პროექტები: არჩეული / მიმდინარე",
+    en: "Projects: selected / ongoing",
   },
   statActive: { ka: "მიმდინარე", en: "Active" },
   statMilestones30: {
@@ -34,6 +34,58 @@ const STRINGS = {
   themeSystem: { ka: "სისტემური", en: "System" },
   themeLight: { ka: "ნათელი", en: "Light" },
   themeDark: { ka: "მუქი", en: "Dark" },
+
+  viewLabel: { ka: "ხედი", en: "View" },
+  view_gantt: { ka: "განრიგი", en: "Gantt" },
+  view_board: { ka: "დაფა", en: "Board" },
+  view_list: { ka: "სია", en: "List" },
+  boardColumnEmpty: { ka: "თასქები არ არის.", en: "No tasks here." },
+  categories: { ka: "კატეგორიები", en: "Categories" },
+  categoriesHint: {
+    ka: "ახალი კატეგორია გამოჩნდება დაფაზე და სიაში, „შესრულებულის“ წინ.",
+    en: "New categories appear on the Board and List, before Done.",
+  },
+  categoryName: { ka: "კატეგორიის სახელი", en: "Category name" },
+  newCategoryName: { ka: "ახალი კატეგორიის სახელი", en: "New category name" },
+  addCategory: { ka: "დამატება", en: "Add" },
+  errCategoryExists: {
+    ka: "ამ სახელით კატეგორია უკვე არსებობს.",
+    en: "A category with this name already exists.",
+  },
+  confirmDeleteCategory: {
+    ka: "წაიშალოს კატეგორია „{name}“? მასში არსებული თასქები ({n}) გადავა „გასაკეთებელში“.",
+    en: "Delete the category \"{name}\"? Its tasks ({n}) will move to To do.",
+  },
+  moveToStatus: {
+    ka: "გადატანა სტატუსში „{status}“: {name}",
+    en: "Move to {status}: {name}",
+  },
+  colProject: { ka: "პროექტი", en: "Project" },
+  goToToday: { ka: "დღეს", en: "Today" },
+  confirmShift: {
+    ka: "გადავიტანო პროექტი „{name}“ {days} დღით? მასთან ერთად გადავა {n} ღია თასქი და ჩასაბარებელი დოკუმენტი.",
+    en: 'Move project "{name}" by {days} days? {n} open tasks and deliverables move with it.',
+  },
+  overviewDragHint: {
+    ka: "გახსენით სტრიქონი და გადაათრიეთ თასქი სხვა პირზე, რომ გადაანაწილოთ.",
+    en: "Open a row and drag a task onto another person to reassign it.",
+  },
+  contractDrop: { ka: "ან გადმოათრიეთ ფაილი აქ", en: "or drag the file here" },
+  dismiss: { ka: "დახურვა", en: "Dismiss" },
+  undo: { ka: "გაუქმება", en: "Undo" },
+  redo: { ka: "გამეორება", en: "Redo" },
+  undone: { ka: "გაუქმდა: {name}", en: "Undone: {name}" },
+  redone: { ka: "განმეორდა: {name}", en: "Redone: {name}" },
+  projectOrder: { ka: "პროექტების თანმიმდევრობა", en: "project order" },
+  undoSkipped: {
+    ka: "{n} ელემენტი მას შემდეგ შეიცვალა და ხელუხლებელი დარჩა.",
+    en: "{n} changed since then and left as is.",
+  },
+  showLess: { ka: "ნაკლების ჩვენება", en: "Show less" },
+  calendarUndated: {
+    ka: "დასრულების თარიღის გარეშე თასქები აქ არ ჩანს: {n}",
+    en: "Tasks with no end date are not shown here: {n}",
+  },
 
   dragReorder: {
     ka: "გადაათრიეთ პროექტის გადასაადგილებლად",
@@ -68,6 +120,8 @@ const STRINGS = {
   colName: { ka: "დასახელება", en: "Name" },
   colStart: { ka: "დაწყება", en: "Start" },
   colEnd: { ka: "დასრულება", en: "End" },
+  colDue: { ka: "ვადა", en: "Due" },
+  resizeColumn: { ka: "სვეტის სიგანის შეცვლა", en: "Resize column" },
   colPerson: {
     ka: "პასუხისმგებელი / შემსრულებელი",
     en: "Responsible / assignee",
@@ -177,6 +231,7 @@ const STRINGS = {
 
   formTitleEditTask: { ka: "თასქის რედაქტირება", en: "Edit task" },
   fieldTaskName: { ka: "თასქის სახელი", en: "Task name" },
+  fieldTaskNote: { ka: "შენიშვნა", en: "Note" },
   errTaskRequired: {
     ka: "თასქის სახელი სავალდებულოა.",
     en: "Task name is required.",

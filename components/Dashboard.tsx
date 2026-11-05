@@ -1,21 +1,49 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Project, Task } from "@/lib/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  Milestone,
+  Project,
+  Task,
+  TaskCategory,
+  TaskStatus,
+} from "@/lib/types";
 import { useLang, type Lang, type StrKey } from "@/lib/i18n";
 import { applyTheme, useTheme, type ThemeChoice } from "@/lib/theme";
 import { splitAssignees } from "@/lib/assignees";
+import {
+  shiftedProject,
+  withDeadline,
+  withDeliverableDate,
+  withTaskChange,
+} from "@/lib/workItems";
+import {
+  changeLabel,
+  diffCategories,
+  diffProjects,
+  reversed,
+  type RowChange,
+  type TrackEdit,
+} from "@/lib/undo";
+import {
+  DASHBOARD_VIEWS,
+  useDashboardView,
+  type DashboardView,
+} from "@/lib/viewMode";
 import Gantt from "./Gantt";
-import StatTiles, { PANEL_IDS } from "./StatTiles";
+import BoardView from "./BoardView";
+import ListView from "./ListView";
+import CalendarView from "./CalendarView";
+import StatTiles, { PANEL_IDS, prefersReducedMotion } from "./StatTiles";
 import WorkOverview from "./WorkOverview";
 import Deadlines from "./Deadlines";
 import ProjectHealth from "./ProjectHealth";
-import MilestoneCalendar from "./MilestoneCalendar";
 import ProjectPanel from "./ProjectPanel";
 import ProjectFormModal from "./ProjectFormModal";
 import TaskFormModal from "./TaskFormModal";
 import ContractUploadModal from "./ContractUploadModal";
 import ExportModal from "./ExportModal";
+import CategoryModal from "./CategoryModal";
 import ProjectFilter from "./ProjectFilter";
 import Logo from "./Logo";
 
@@ -27,7 +55,7 @@ function LangToggle() {
   ];
   return (
     <div
-      className="flex overflow-hidden rounded-lg border border-edge text-[13px]"
+      className="flex overflow-hidden rounded-lg border border-edge text-[16px]"
       role="group"
       aria-label="Language"
     >
@@ -68,7 +96,7 @@ function ThemeToggle() {
   ];
   return (
     <div
-      className="flex overflow-hidden rounded-lg border border-edge text-[13px]"
+      className="flex overflow-hidden rounded-lg border border-edge text-[16px]"
       role="group"
       aria-label={t("themeLabel")}
     >
@@ -93,25 +121,183 @@ function ThemeToggle() {
   );
 }
 
+function ViewSwitcher({
+  view,
+  onChange,
+}: {
+  view: DashboardView;
+  onChange: (view: DashboardView) => void;
+}) {
+  const { t } = useLang();
+  return (
+    <div
+      className="flex overflow-hidden rounded-lg border border-edge text-[16px]"
+      role="group"
+      aria-label={t("viewLabel")}
+    >
+      {DASHBOARD_VIEWS.map((v) => (
+        <button
+          key={v}
+          onClick={() => onChange(v)}
+          aria-pressed={view === v}
+          className="px-2.5 py-1 font-medium"
+          style={
+            view === v
+              ? { background: "var(--accent)", color: "#ffffff" }
+              : { color: "var(--text-secondary)" }
+          }
+        >
+          {t(`view_${v}`)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const MAX_UNDO = 50;
+
+type Snapshot = { projects: Project[]; categories: TaskCategory[] };
+
+async function fetchSnapshot(): Promise<Snapshot> {
+  const [projects, categories] = await Promise.all(
+    ["/api/projects", "/api/task-categories"].map(async (path) => {
+      const res = await fetch(path);
+      if (!res.ok) throw new Error(res.statusText);
+      return res.json();
+    })
+  );
+  return { projects, categories };
+}
+
+/** Ctrl+Z in a text box belongs to the box. Checkboxes and selects hold no text. */
+function isTextEntry(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target instanceof HTMLInputElement)
+    return !["checkbox", "radio", "button"].includes(target.type);
+  return target instanceof HTMLTextAreaElement || target.isContentEditable;
+}
+
 export default function Dashboard() {
   const { t, lang } = useLang();
+  const { view, setView } = useDashboardView();
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [categories, setCategories] = useState<TaskCategory[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [modal, setModal] = useState<
-    "closed" | "create" | "edit" | "contract" | "export"
+    "closed" | "create" | "edit" | "contract" | "export" | "categories"
   >("closed");
   const [editTask, setEditTask] = useState<Task | null>(null);
-  // One project filter behind the timeline and both overview panels, so
-  // narrowing any one narrows the others. Empty means "all projects".
+  // One project filter behind the stat tiles, the timeline and both overview
+  // panels, so narrowing any one narrows the others. Empty means "all projects".
   const [filterPicked, setFilterPicked] = useState<Set<number>>(
     () => new Set()
   );
   // Finished projects are hidden from the timeline unless asked for.
   const [showPast, setShowPast] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [undoNotice, setUndoNotice] = useState<string | null>(null);
+  const [canStep, setCanStep] = useState({ undo: false, redo: false });
+
+  // Saves and undos run strictly one at a time. Ctrl+Z straight after a drop has
+  // to wait for that save, or there would be nothing yet to undo, and the reads
+  // either side of a save must not pick up another save's changes.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const queued = useRef(0);
+  const history = useRef<{ undo: RowChange[][]; redo: RowChange[][] }>({
+    undo: [],
+    redo: [],
+  });
+
+  const enqueue = useCallback(<T,>(job: () => Promise<T>) => {
+    queued.current++;
+    const run = queue.current.then(job).finally(() => {
+      queued.current--;
+    });
+    queue.current = run.catch(() => {});
+    return run;
+  }, []);
+
+  // While more work is queued its optimistic update is on screen, so a result
+  // from before that work must not replace it.
+  const showResult = useCallback((data: Snapshot) => {
+    if (queued.current === 1) {
+      setProjects(data.projects);
+      setCategories(data.categories);
+    }
+  }, []);
+
+  const publishHistory = useCallback(() => {
+    setCanStep({
+      undo: history.current.undo.length > 0,
+      redo: history.current.redo.length > 0,
+    });
+  }, []);
+
+  // Both reads come from the server rather than local state, which can be hours
+  // old: a colleague's earlier change must not count as part of this edit.
+  const track: TrackEdit = useCallback(
+    (save) =>
+      enqueue(async () => {
+        const before = await fetchSnapshot();
+        const result = await save();
+        const after = await fetchSnapshot();
+        const changes = [
+          ...diffCategories(before.categories, after.categories),
+          ...diffProjects(before.projects, after.projects),
+        ];
+        if (changes.length > 0) {
+          const { undo } = history.current;
+          undo.push(changes);
+          if (undo.length > MAX_UNDO) undo.shift();
+          history.current.redo = [];
+          publishHistory();
+        }
+        showResult(after);
+        return result;
+      }),
+    [enqueue, publishHistory, showResult]
+  );
+
+  const step = useCallback(
+    (direction: "undo" | "redo") =>
+      enqueue(async () => {
+        const stack = history.current[direction];
+        const edit = stack[stack.length - 1];
+        if (!edit) return;
+        try {
+          const res = await fetch("/api/restore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              rows: direction === "undo" ? reversed(edit) : edit,
+            }),
+          });
+          if (!res.ok) throw new Error(res.statusText);
+          const { restored, skipped } = await res.json();
+          stack.pop();
+          if (restored > 0)
+            history.current[direction === "undo" ? "redo" : "undo"].push(edit);
+          publishHistory();
+          showResult(await fetchSnapshot());
+          const done = t(direction === "undo" ? "undone" : "redone", {
+            name: changeLabel(edit) ?? t("projectOrder"),
+          });
+          const left = t("undoSkipped", { n: String(skipped) });
+          setSaveFailed(false);
+          setUndoNotice(
+            skipped === 0 ? done : restored > 0 ? `${done} ${left}` : left
+          );
+        } catch {
+          setSaveFailed(true);
+        }
+      }),
+    [enqueue, publishHistory, showResult, t]
+  );
 
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/projects");
-    setProjects(await res.json());
+    const data = await fetchSnapshot();
+    setProjects(data.projects);
+    setCategories(data.categories);
   }, []);
 
   const reorder = useCallback(
@@ -131,14 +317,184 @@ export default function Dashboard() {
         .map((id) => byId.get(id))
         .filter((p): p is Project => p !== undefined);
       if (next.length === projects.length) setProjects(next);
-      await fetch("/api/projects", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: orderedIds }),
-      });
+      await track(() =>
+        fetch("/api/projects", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order: orderedIds }),
+        })
+      );
     },
-    [projects]
+    [projects, track]
   );
+
+  // Drag results and status changes are optimistic for the same reason as
+  // reorder: a dropped item must not jump back while the request is out. A failed
+  // save restores what was on screen and says so.
+  const commit = useCallback(
+    async (
+      id: number,
+      change: (p: Project) => Project,
+      path: string,
+      method: string,
+      body: unknown
+    ) => {
+      const before = projects;
+      setSaveFailed(false);
+      setProjects(
+        (cur) => cur && cur.map((p) => (p.id === id ? change(p) : p))
+      );
+      try {
+        // track's re-read picks up the linked side of a task/deliverable pair
+        await track(async () => {
+          const res = await fetch(path, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) throw new Error(res.statusText);
+        });
+      } catch {
+        setProjects(before);
+        setSaveFailed(true);
+      }
+    },
+    [projects, track]
+  );
+
+  const patchTask = useCallback(
+    (task: Task, fields: Partial<Task>) =>
+      commit(
+        task.project_id,
+        (p) => withTaskChange(p, task.id, fields),
+        `/api/tasks/${task.id}`,
+        "PATCH",
+        fields
+      ),
+    [commit]
+  );
+
+  const moveTaskDeadline = useCallback(
+    (task: Task, date: string) => patchTask(task, withDeadline(task, date)),
+    [patchTask]
+  );
+
+  const moveDeliverable = useCallback(
+    (milestone: Milestone, date: string) => {
+      const project = projects?.find((p) => p.id === milestone.project_id);
+      const linked = project?.tasks.find((x) => x.name === milestone.name);
+      if (linked) return moveTaskDeadline(linked, date);
+      return commit(
+        milestone.project_id,
+        (p) => withDeliverableDate(p, milestone, date),
+        `/api/milestones/${milestone.id}`,
+        "PATCH",
+        { due_date: date }
+      );
+    },
+    [projects, moveTaskDeadline, commit]
+  );
+
+  const setDeliverableDone = useCallback(
+    (milestone: Milestone, done: boolean) =>
+      commit(
+        milestone.project_id,
+        (p) => ({
+          ...p,
+          milestones: p.milestones.map((m) =>
+            m.id === milestone.id ? { ...m, done: done ? 1 : 0 } : m
+          ),
+        }),
+        `/api/milestones/${milestone.id}`,
+        "PATCH",
+        { done }
+      ),
+    [commit]
+  );
+
+  const resizeProject = useCallback(
+    (project: Project, start_date: string, end_date: string) =>
+      commit(
+        project.id,
+        (p) => ({ ...p, start_date, end_date }),
+        `/api/projects/${project.id}`,
+        "PATCH",
+        { start_date, end_date }
+      ),
+    [commit]
+  );
+
+  // The one drag that rewrites many rows at once, so it asks first whenever it
+  // would carry open work along.
+  const moveProject = useCallback(
+    (project: Project, days: number) => {
+      const open =
+        project.tasks.filter((x) => x.status !== "done").length +
+        project.milestones.filter((m) => !m.done).length;
+      if (
+        open > 0 &&
+        !confirm(
+          t("confirmShift", {
+            name: project.name,
+            days: days > 0 ? `+${days}` : String(days),
+            n: String(open),
+          })
+        )
+      )
+        return;
+      return commit(
+        project.id,
+        (p) => shiftedProject(p, days),
+        `/api/projects/${project.id}/shift`,
+        "POST",
+        { days }
+      );
+    },
+    [commit, t]
+  );
+
+  const moveTask = useCallback(
+    (task: Task, status: TaskStatus) => patchTask(task, { status }),
+    [patchTask]
+  );
+
+  const reassignTask = useCallback(
+    (task: Task, assignee: string) => patchTask(task, { assignee }),
+    [patchTask]
+  );
+
+  // The non-Gantt views can be taller than the screen, so opening a project
+  // from one of them has to bring its panel into view.
+  const openProject = useCallback((id: number) => {
+    setSelectedId(id);
+    requestAnimationFrame(() => {
+      document.getElementById(PANEL_IDS.project)?.scrollIntoView({
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+        block: "nearest",
+      });
+    });
+  }, []);
+
+  // Physical keys, not letters: on a Georgian layout the Z key reports "ზ".
+  const dialogOpen = modal !== "closed" || editTask !== null;
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const redo = e.code === "KeyY" || (e.code === "KeyZ" && e.shiftKey);
+      if (!redo && e.code !== "KeyZ") return;
+      if (dialogOpen || isTextEntry(e.target)) return;
+      e.preventDefault();
+      step(redo ? "redo" : "undo");
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dialogOpen, step]);
+
+  useEffect(() => {
+    if (!undoNotice) return;
+    const timer = setTimeout(() => setUndoNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [undoNotice]);
 
   // keep <html lang> in sync (useUiLang and screen readers rely on it)
   useEffect(() => {
@@ -147,11 +503,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/projects")
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled) setProjects(data);
-      });
+    fetchSnapshot().then((data) => {
+      if (cancelled) return;
+      setProjects(data.projects);
+      setCategories(data.categories);
+    });
     return () => {
       cancelled = true;
     };
@@ -170,6 +526,15 @@ export default function Dashboard() {
           .map((p) => p.id)
       ),
     [projects, filterPicked]
+  );
+  // Unlike the timeline, the tiles ignore "show past": it only decides what the
+  // chart draws, and their overdue and deliverable counts cover finished projects.
+  const tileProjects = useMemo(
+    () =>
+      picked.size > 0
+        ? (projects ?? []).filter((p) => picked.has(p.id))
+        : (projects ?? []),
+    [projects, picked]
   );
   // The timeline's own list offers what "show past" allows.
   const timelineRelevant = useMemo(
@@ -208,7 +573,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-4 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-[100rem] space-y-4 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Logo />
@@ -220,7 +585,27 @@ export default function Dashboard() {
             {t("appTitle")}
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1" role="group">
+            <button
+              className="btn disabled:opacity-40"
+              disabled={!canStep.undo}
+              onClick={() => step("undo")}
+              aria-label={t("undo")}
+              title={`${t("undo")} (Ctrl+Z)`}
+            >
+              ↶
+            </button>
+            <button
+              className="btn disabled:opacity-40"
+              disabled={!canStep.redo}
+              onClick={() => step("redo")}
+              aria-label={t("redo")}
+              title={`${t("redo")} (Ctrl+Y)`}
+            >
+              ↷
+            </button>
+          </div>
           <ThemeToggle />
           <LangToggle />
           {projects.length > 0 && (
@@ -234,7 +619,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <StatTiles projects={projects} />
+      <StatTiles projects={tileProjects} allProjects={projects} />
 
       {projects.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 px-6 py-16 text-center">
@@ -245,8 +630,14 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          <div id={PANEL_IDS.gantt} className="card scroll-mt-4 overflow-x-auto p-4">
-            <div className="mb-2 flex flex-wrap items-center gap-4 empty:hidden">
+          <div
+            id={PANEL_IDS.gantt}
+            className={`card scroll-mt-4 p-4 ${
+              view === "gantt" ? "overflow-x-auto" : ""
+            }`}
+          >
+            <div className="mb-3 flex flex-wrap items-center gap-4">
+              <ViewSwitcher view={view} onChange={setView} />
               <ProjectFilter
                 projects={projects}
                 relevant={timelineRelevant}
@@ -254,7 +645,7 @@ export default function Dashboard() {
                 onChange={setFilterPicked}
               />
               {hasPast && (
-                <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-ink-2">
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-[16px] text-ink-2">
                   <input
                     type="checkbox"
                     checked={showPast}
@@ -263,36 +654,76 @@ export default function Dashboard() {
                   {t("showPastProjects")}
                 </label>
               )}
+              {view !== "gantt" && (
+                <button
+                  className="btn ml-auto"
+                  onClick={() => setModal("categories")}
+                >
+                  {t("categories")}
+                </button>
+              )}
             </div>
             {timelineProjects.length === 0 && (
               <p className="py-6 text-center text-sm text-ink-3">
                 {t("noActiveProjects")}
               </p>
             )}
-            <Gantt
-              projects={timelineProjects}
-              selectedId={selectedId}
-              onSelect={(id) =>
-                setSelectedId((cur) => (cur === id ? null : id))
-              }
-              onReorder={reorder}
-            />
+            {view === "gantt" && (
+              <Gantt
+                projects={timelineProjects}
+                selectedId={selectedId}
+                onSelect={(id) =>
+                  setSelectedId((cur) => (cur === id ? null : id))
+                }
+                onReorder={reorder}
+                onMoveProject={moveProject}
+                onResizeProject={resizeProject}
+                onChangeTask={patchTask}
+                categories={categories}
+                onMoveDeliverable={moveDeliverable}
+              />
+            )}
+            {timelineProjects.length > 0 && view === "board" && (
+              <BoardView
+                projects={timelineProjects}
+                categories={categories}
+                onMoveTask={moveTask}
+                onSelect={openProject}
+                onEditTask={setEditTask}
+              />
+            )}
+            {timelineProjects.length > 0 && view === "list" && (
+              <ListView
+                projects={timelineProjects}
+                categories={categories}
+                onMoveTask={moveTask}
+                onSetDeliverableDone={setDeliverableDone}
+                onSelect={openProject}
+                onEditTask={setEditTask}
+              />
+            )}
           </div>
 
           {selected ? (
-            <ProjectPanel
-              project={selected}
-              people={people}
-              onChanged={refresh}
-              onEditTask={setEditTask}
-              onEdit={() => setModal("edit")}
-              onDeleted={() => {
-                setSelectedId(null);
-                refresh();
-              }}
-            />
+            <div id={PANEL_IDS.project} className="scroll-mt-4">
+              <ProjectPanel
+                project={selected}
+                people={people}
+                onChanged={refresh}
+                track={track}
+                categories={categories}
+                onEditTask={setEditTask}
+                onEdit={() => setModal("edit")}
+                onDeleted={() => {
+                  setSelectedId(null);
+                  refresh();
+                }}
+              />
+            </div>
           ) : (
-            <p className="px-1 text-sm text-ink-3">{t("hint")}</p>
+            view === "gantt" && (
+              <p className="px-1 text-sm text-ink-3">{t("hint")}</p>
+            )
           )}
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -302,6 +733,7 @@ export default function Dashboard() {
               onFilter={setFilterPicked}
               onSelect={(id) => setSelectedId(id)}
               onEditTask={setEditTask}
+              onReassign={reassignTask}
             />
             <Deadlines
               projects={projects}
@@ -315,17 +747,56 @@ export default function Dashboard() {
             projects={projects}
             onSelect={(id) => setSelectedId(id)}
           />
-          <MilestoneCalendar
+          <CalendarView
             projects={projects}
-            onSelect={(id) => setSelectedId(id)}
+            onSelect={openProject}
+            onEditTask={setEditTask}
+            onMoveTask={moveTaskDeadline}
+            onMoveDeliverable={moveDeliverable}
           />
         </>
+      )}
+
+      {undoNotice && !saveFailed && (
+        <div
+          role="status"
+          className="card fixed bottom-4 left-1/2 z-30 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 px-4 py-2 text-sm shadow-lg"
+        >
+          {undoNotice}
+          <button
+            type="button"
+            className="text-ink-3 hover:text-ink"
+            aria-label={t("dismiss")}
+            onClick={() => setUndoNotice(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {saveFailed && (
+        <div
+          role="alert"
+          className="card fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 px-4 py-2 text-sm text-[var(--status-critical)] shadow-lg"
+        >
+          {t("errSave")}
+          <button
+            type="button"
+            className="text-ink-3 hover:text-ink"
+            aria-label={t("dismiss")}
+            onClick={() => setSaveFailed(false)}
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {editTask && (
         <TaskFormModal
           task={editTask}
           people={people}
+          categories={categories}
+          track={track}
           onClose={() => setEditTask(null)}
           onSaved={() => {
             setEditTask(null);
@@ -338,6 +809,17 @@ export default function Dashboard() {
         <ExportModal
           projects={projects}
           initialId={selectedId}
+          categories={categories}
+          onClose={() => setModal("closed")}
+        />
+      )}
+
+      {modal === "categories" && (
+        <CategoryModal
+          categories={categories}
+          projects={projects}
+          track={track}
+          onChanged={refresh}
           onClose={() => setModal("closed")}
         />
       )}
@@ -358,6 +840,7 @@ export default function Dashboard() {
         <ProjectFormModal
           initial={modal === "edit" ? selected : null}
           people={people}
+          track={track}
           // Only offered while creating: importing a contract makes a new
           // project, it cannot fill in the one being edited.
           onUploadContract={

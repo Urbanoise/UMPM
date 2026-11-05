@@ -5,6 +5,7 @@ import type { Project, ProjectStatus } from "@/lib/types";
 import { PROJECT_STATUSES } from "@/lib/types";
 import { todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
+import type { TrackEdit } from "@/lib/undo";
 
 export default function ProjectFormModal({
   initial,
@@ -12,6 +13,7 @@ export default function ProjectFormModal({
   onUploadContract,
   onClose,
   onSaved,
+  track,
 }: {
   initial: Project | null;
   people: string[];
@@ -19,6 +21,7 @@ export default function ProjectFormModal({
   onUploadContract?: () => void;
   onClose: () => void;
   onSaved: () => void;
+  track: TrackEdit;
 }) {
   const { t } = useLang();
   const [name, setName] = useState(initial?.name ?? "");
@@ -51,11 +54,13 @@ export default function ProjectFormModal({
       tentative,
     };
     const res = initial
-      ? await fetch(`/api/projects/${initial.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
+      ? await track(() =>
+          fetch(`/api/projects/${initial.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        )
       : await fetch("/api/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

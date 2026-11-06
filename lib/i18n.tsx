@@ -387,8 +387,12 @@ const STRINGS = {
   outboxTitle: { ka: "გასაგზავნი შეტყობინებები", en: "Emails to send" },
   outboxClose: { ka: "დახურვა", en: "Close" },
   outboxHint: {
-    ka: "ახალი დავალებების ელფოსტა მხოლოდ აქედან იგზავნება.",
-    en: "Emails about new assignments go out only from here.",
+    ka: "ახალი დავალებებისა და შეცვლილი თარიღების ელფოსტა მხოლოდ აქედან იგზავნება.",
+    en: "Emails about new assignments and changed dates go out only from here.",
+  },
+  outboxDatesWere: {
+    ka: "თარიღები შეიცვალა, იყო: {was}",
+    en: "Dates changed, were: {was}",
   },
   outboxEmpty: { ka: "გასაგზავნი არაფერია.", en: "Nothing to send." },
   outboxSend: { ka: "გაგზავნა ({n})", en: "Send ({n})" },

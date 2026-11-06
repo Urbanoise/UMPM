@@ -12,6 +12,16 @@ export interface Outbox {
 
 const itemKey = (item: PendingAssignment) => `${item.task_id}|${item.name}`;
 
+function byProject(items: PendingAssignment[]) {
+  const groups = new Map<number, PendingAssignment[]>();
+  for (const item of items) {
+    groups.set(item.project_id, [...(groups.get(item.project_id) ?? []), item]);
+  }
+  return [...groups.values()].sort((a, b) =>
+    a[0].project.localeCompare(b[0].project)
+  );
+}
+
 // Assignment emails go out only from here. Every row is ticked to begin with, so
 // the usual case is one click. Unticking only leaves a row out of this send; a
 // row's ✕ cancels that one email for good, as "Don't send" does for the ticked.
@@ -29,6 +39,11 @@ export default function OutboxModal({
   const [unticked, setUnticked] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  const range = (start: string | null, end: string | null) =>
+    start
+      ? `${fmtDate(start, locale)} – ${fmtDate(end, locale)}`
+      : fmtDate(end, locale);
 
   const picked = items.filter((item) => !unticked.has(itemKey(item)));
 
@@ -79,39 +94,55 @@ export default function OutboxModal({
         {items.length === 0 ? (
           <p className="mt-4 text-sm text-ink-3">{t("outboxEmpty")}</p>
         ) : (
-          <ul className="mt-4 divide-y divide-edge">
-            {items.map((item) => (
-              <li key={itemKey(item)} className="flex items-start gap-2">
-                <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={!unticked.has(itemKey(item))}
-                    onChange={() => toggle(item)}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium">{item.name}</span>
-                    <span className="block break-words text-ink-2">
-                      {item.title}
-                    </span>
-                    <span className="block break-words text-ink-3">
-                      {item.project} · {fmtDate(item.deadline, locale)}
-                    </span>
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  className="px-2 py-2 text-sm text-ink-3 hover:text-ink disabled:opacity-40"
-                  disabled={busy}
-                  aria-label={t("outboxCancelOne", { name: item.name })}
-                  title={t("outboxCancelOne", { name: item.name })}
-                  onClick={() => act("dismiss", [item])}
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
+          byProject(items).map((group) => (
+            <section key={group[0].project_id} className="mt-4">
+              <h3 className="break-words text-sm font-semibold">
+                {group[0].project}
+              </h3>
+              <ul className="mt-1 divide-y divide-edge">
+                {group.map((item) => (
+                  <li key={itemKey(item)} className="flex items-start gap-2">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={!unticked.has(itemKey(item))}
+                        onChange={() => toggle(item)}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium">{item.name}</span>
+                        <span className="block break-words text-ink-2">
+                          {item.title}
+                        </span>
+                        <span className="block break-words text-ink-3">
+                          {item.was
+                            ? range(item.start, item.deadline)
+                            : fmtDate(item.deadline, locale)}
+                        </span>
+                        {item.was && (
+                          <span className="block break-words text-ink-3">
+                            {t("outboxDatesWere", {
+                              was: range(item.was.start, item.was.end),
+                            })}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      className="px-2 py-2 text-sm text-ink-3 hover:text-ink disabled:opacity-40"
+                      disabled={busy}
+                      aria-label={t("outboxCancelOne", { name: item.name })}
+                      title={t("outboxCancelOne", { name: item.name })}
+                      onClick={() => act("dismiss", [item])}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))
         )}
 
         {!mailEnabled && items.length > 0 && (

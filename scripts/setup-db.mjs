@@ -142,6 +142,15 @@ if (!notified_before) {
   ]);
   console.log(`marked ${seeded.length} existing assignment(s) as already notified`);
 }
+// The dates each assignee was last told, on their assignment row. A row without
+// them counts as told the task's current dates, so this mails nobody.
+await sql`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS dates TEXT`;
+await sql`
+  UPDATE notifications n
+     SET dates = COALESCE(t.start_date, '') || '|' || COALESCE(t.end_date, '')
+    FROM tasks t
+   WHERE n.kind = 'assigned' AND n.dates IS NULL AND n.item = 't' || t.id
+`;
 console.log("schema ready");
 
 if (process.argv.includes("--seed")) {

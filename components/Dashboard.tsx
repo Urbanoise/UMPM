@@ -30,6 +30,7 @@ import {
   useDashboardView,
   type DashboardView,
 } from "@/lib/viewMode";
+import { taskOf } from "@/lib/linked";
 import Gantt from "./Gantt";
 import BoardView from "./BoardView";
 import ListView from "./ListView";
@@ -43,6 +44,7 @@ import ProjectFormModal from "./ProjectFormModal";
 import TaskFormModal from "./TaskFormModal";
 import ContractUploadModal from "./ContractUploadModal";
 import ExportModal from "./ExportModal";
+import AddCategory from "./AddCategory";
 import CategoryModal from "./CategoryModal";
 import ProjectFilter from "./ProjectFilter";
 import Logo from "./Logo";
@@ -187,8 +189,9 @@ export default function Dashboard() {
     "closed" | "create" | "edit" | "contract" | "export" | "categories"
   >("closed");
   const [editTask, setEditTask] = useState<Task | null>(null);
-  // One project filter behind the stat tiles, the timeline and both overview
-  // panels, so narrowing any one narrows the others. Empty means "all projects".
+  // One project filter behind the stat tiles, the timeline, both overview panels
+  // and the calendar, so narrowing any one narrows the others. Empty means "all
+  // projects".
   const [filterPicked, setFilterPicked] = useState<Set<number>>(
     () => new Set()
   );
@@ -382,7 +385,7 @@ export default function Dashboard() {
   const moveDeliverable = useCallback(
     (milestone: Milestone, date: string) => {
       const project = projects?.find((p) => p.id === milestone.project_id);
-      const linked = project?.tasks.find((x) => x.name === milestone.name);
+      const linked = project && taskOf(project, milestone);
       if (linked) return moveTaskDeadline(linked, date);
       return commit(
         milestone.project_id,
@@ -655,12 +658,15 @@ export default function Dashboard() {
                 </label>
               )}
               {view !== "gantt" && (
-                <button
-                  className="btn ml-auto"
-                  onClick={() => setModal("categories")}
-                >
-                  {t("categories")}
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    className="btn"
+                    onClick={() => setModal("categories")}
+                  >
+                    {t("categories")}
+                  </button>
+                  <AddCategory onAdded={refresh} />
+                </div>
               )}
             </div>
             {timelineProjects.length === 0 && (
@@ -749,6 +755,8 @@ export default function Dashboard() {
           />
           <CalendarView
             projects={projects}
+            filterIds={picked}
+            onFilter={setFilterPicked}
             onSelect={openProject}
             onEditTask={setEditTask}
             onMoveTask={moveTaskDeadline}

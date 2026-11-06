@@ -5,7 +5,7 @@ import type { Project, Task } from "@/lib/types";
 import { fmtShortDate, shiftDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
 import { PANEL_IDS } from "./StatTiles";
-import { deliverableNames } from "@/lib/linked";
+import { linkedTaskIds } from "@/lib/linked";
 import { seriesVar } from "@/lib/workItems";
 import ProjectFilter from "./ProjectFilter";
 
@@ -77,13 +77,13 @@ export default function Deadlines({
         }
       }
       if (p.status === "done") continue;
-      // A task that also exists as a deliverable is listed once, as the
+      // A task linked to a deliverable is listed once, as the
       // deliverable — which also means the deliverable's done tick is what
       // decides whether the pair still counts as a deadline.
-      const linked = deliverableNames(p);
+      const linked = linkedTaskIds(p);
       for (const task of p.tasks) {
         if (task.status === "done" || !task.end_date) continue;
-        if (linked.has(task.name)) continue;
+        if (linked.has(task.id)) continue;
         if (task.end_date <= horizon) {
           items.push({
             key: `t${task.id}`,

@@ -7,7 +7,7 @@ import type { Milestone, Project, Task, TaskCategory } from "./types";
 import { isStarted, statusLabel } from "./taskStatus";
 import type { StrKey } from "./i18n";
 import { fmtDate, fmtMonthShort, parseDate, todayStr } from "./dates";
-import { deliverableNames } from "./linked";
+import { deliverableOf } from "./linked";
 
 type T = (key: StrKey, params?: Record<string, string>) => string;
 
@@ -317,17 +317,19 @@ export async function buildXlsx(
       topRule: true,
     });
 
-    // A task and a deliverable of the same name are one commitment: with tasks
-    // included, the task row carries it and gets the diamond at its end.
-    const linked = includeTasks ? deliverableNames(p) : new Set<string>();
+    // A linked task and deliverable are one commitment: with tasks included, the
+    // task row carries it, naming the deliverable, with the diamond at its end.
     if (includeTasks)
       for (const task of p.tasks) {
         const dated = task.start_date || task.end_date;
         const overdue = taskOverdue(task, today);
         const span = dated ? taskSpan(task) : null;
-        const deliverable = p.milestones.find((m) => m.name === task.name);
+        const deliverable = deliverableOf(p, task);
         addRow({
-          name: task.name,
+          name:
+            deliverable && deliverable.name !== task.name
+              ? `${task.name} ◆ ${deliverable.name}`
+              : task.name,
           indent: true,
           start: task.start_date,
           end: task.end_date,
@@ -355,7 +357,7 @@ export async function buildXlsx(
       }
 
     const deliverables = p.milestones
-      .filter((m) => !linked.has(m.name))
+      .filter((m) => !includeTasks || m.task_id === null)
       .sort((a, b) => a.due_date.localeCompare(b.due_date));
     for (const m of deliverables) {
       const overdue = milestoneOverdue(m, today);

@@ -74,21 +74,25 @@ special handling in the completion, overdue or sync logic; `isStarted` in
 `lib/taskStatus.ts` counts one as started for the Gantt fill and the overview.
 Order, labels and colours come from that same file: categories sit between the
 built-in open statuses and Done, oldest first, and take their colour from their id.
+`AddCategoryForm` is the one way to create a category, behind both the Board and
+List toolbar button and the Categories dialog; adding is not an undo step.
 `Dashboard` reads them alongside the projects as one snapshot. Deleting a category
 moves its tasks to `todo`; a deliverable with no task only ever offers `todo` and
 `done`. Write statuses through `isTaskStatus`, not `TASK_STATUSES`, except in
 contract import, which only uses the built-ins.
 
-**Tasks linked to deliverables.** A task and a milestone ("deliverable" in the
-UI) with the same `name` inside the same project are one commitment shown twice.
-The link is by name only — there is no foreign key. `lib/linked.ts` detects it
-client-side; `syncDeliverablesFromTasks` / `syncTaskFromDeliverable` in
+**Tasks linked to deliverables.** `milestones.task_id` makes a deliverable the
+endpoint of a task, and the two are then one commitment shown twice, even with
+different names. A task has at most one deliverable (unique index), most tasks
+have none, and deleting the task leaves the deliverable unlinked. It is set from
+the deliverable's row in the project panel, where linking moves the deliverable
+to the task's end date. A task and deliverable created under one name link
+themselves (`linkSameNamed`), which is how contract import links; a later rename
+changes nothing. `lib/linked.ts` reads the link client-side; `syncDeliverablesFromTasks` / `syncTaskFromDeliverable` in
 `lib/queries.ts` keep the dates and completion (task status `done` ⇔ milestone
 `done = 1`) in step server-side. Any route that writes `tasks.end_date`,
-`tasks.name`, `tasks.status`, `milestones.due_date`, `milestones.name` or
-`milestones.done` must
-call the matching sync helper afterwards (`/api/restore` does too) (a rename can re-point the link, so
-name changes trigger a re-sync too).
+`tasks.status`, `milestones.due_date`, `milestones.done` or `milestones.task_id`
+must call the matching sync helper afterwards (`/api/restore` does too).
 
 **API route conventions.** All handlers live under `app/api/`. PATCH bodies are
 partial: a key that is `undefined` is left alone, a present-but-empty value
@@ -132,7 +136,7 @@ API call — the request shape has drifted (no `budget_tokens`, no prefill,
 Three things in the system prompt exist to satisfy constraints elsewhere in the
 codebase, so keep them in step: undated deliverables must become tasks
 (`milestones.due_date` is NOT NULL); a stage and the document it produces must
-share one name (that is what links them — see above); and dates must come back
+share one name (that is what links them on import — see above); and dates must come back
 as `YYYY-MM-DD` because that is how the whole app stores them. `normalize()` in
 the same file then widens the project window to contain every extracted date,
 which the Gantt assumes. The uploaded file is never persisted.
@@ -141,7 +145,8 @@ which the Gantt assumes. The uploaded file is never persisted.
 module constants at the top control geometry (`ROW_H`, `BAR_H`, …), a linear
 `x(t)` maps epoch ms to pixels over an auto-computed date range, width comes
 from a `ResizeObserver`, and the selected project expands to show its dated
-tasks as sub-rows. It also implements pointer-based drag reordering that calls
+tasks as sub-rows, a linked task with the deliverable's diamond at its end, then one
+sub-row per unlinked deliverable (the same rows as the export). It also implements pointer-based drag reordering that calls
 back into `Dashboard.reorder`. The name and due date columns can be dragged wider
 or narrower; `lib/ganttColumns.ts` remembers the widths per browser and clamps
 them so the timeline always keeps some room.
@@ -153,7 +158,7 @@ holds tasks only, one column per status or category, because a deliverable has n
 state. `ListView` groups tasks plus any deliverable with no matching task under
 each status, the chosen sort applying inside each group, and
 gives a linked pair the task's row. `CalendarView` is a permanent panel further
-down, not one of the views; it covers every project and draws each item as a bar
+down, not one of the views; it follows the project filter but not "show past", and draws each item as a bar
 over its start-to-end days (`calendarSpans` / `weekSegments` in
 `lib/workItems.ts`), so a linked pair is the task there too, marked as a
 deliverable, because only the task has a start date.

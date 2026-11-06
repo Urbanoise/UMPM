@@ -9,6 +9,7 @@ export interface Milestone {
   name: string;
   due_date: string; // YYYY-MM-DD
   done: number; // 0 | 1
+  task_id: number | null; // the task this deliverable is the endpoint of
 }
 
 export interface Task {

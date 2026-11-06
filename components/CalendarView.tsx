@@ -21,6 +21,7 @@ import {
   type WeekSegment,
 } from "@/lib/workItems";
 import { KindMark } from "./Deadlines";
+import ProjectFilter from "./ProjectFilter";
 import { PANEL_IDS } from "./StatTiles";
 
 const VISIBLE_LANES = 3; // rows of bars per week before "+N more"
@@ -30,12 +31,16 @@ const BAR_INSET = 3; // gap at a bar's real ends, none where it continues
 
 export default function CalendarView({
   projects,
+  filterIds,
+  onFilter,
   onSelect,
   onEditTask,
   onMoveTask,
   onMoveDeliverable,
 }: {
   projects: Project[];
+  filterIds: Set<number>;
+  onFilter: (ids: Set<number>) => void;
   onSelect: (id: number) => void;
   onEditTask: (task: Task) => void;
   onMoveTask: (task: Task, date: string) => void;
@@ -56,10 +61,27 @@ export default function CalendarView({
   const year = Number(month.slice(0, 4));
   const monthIndex = Number(month.slice(5, 7)) - 1;
 
-  const spans = useMemo(() => calendarSpans(projects), [projects]);
+  const allSpans = useMemo(() => calendarSpans(projects), [projects]);
+  // Only projects with something to draw, so this panel's dropdown never offers
+  // a pick that empties every month.
+  const relevant = useMemo(
+    () => new Set(allSpans.map((s) => s.project.id)),
+    [allSpans]
+  );
+  const spans = useMemo(
+    () =>
+      filterIds.size === 0
+        ? allSpans
+        : allSpans.filter((s) => filterIds.has(s.project.id)),
+    [allSpans, filterIds]
+  );
   const undated = useMemo(
-    () => projects.flatMap((p) => p.tasks).filter((x) => !x.end_date).length,
-    [projects]
+    () =>
+      projects
+        .filter((p) => filterIds.size === 0 || filterIds.has(p.id))
+        .flatMap((p) => p.tasks)
+        .filter((x) => !x.end_date).length,
+    [projects, filterIds]
   );
   const weekdays = useMemo(() => weekdayInitials(locale), [locale]);
 
@@ -177,6 +199,12 @@ export default function CalendarView({
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-x-3">
           <h2 className="text-sm font-semibold">{t("calendarTitle")}</h2>
+          <ProjectFilter
+            projects={projects}
+            relevant={relevant}
+            value={filterIds}
+            onChange={onFilter}
+          />
           <span className="text-sm text-ink-2">
             {fmtMonthYear(new Date(year, monthIndex, 1), locale)}
           </span>

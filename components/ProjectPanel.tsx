@@ -256,11 +256,41 @@ export default function ProjectPanel({
                     }}
                     aria-label={`${t("markDone")} ${m.name}`}
                   />
-                  <span
-                    className={`flex-1 text-sm ${m.done ? "text-ink-3 line-through" : ""}`}
-                  >
-                    {m.name}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span
+                      className={`block text-sm ${m.done ? "text-ink-3 line-through" : ""}`}
+                    >
+                      {m.name}
+                    </span>
+                    <select
+                      className="mt-1 max-w-full text-xs"
+                      aria-label={`${t("deliverableTask")}: ${m.name}`}
+                      title={t("deliverableTask")}
+                      value={m.task_id ?? ""}
+                      onChange={async (e) => {
+                        const task_id = e.target.value
+                          ? Number(e.target.value)
+                          : null;
+                        await track(() =>
+                          api(`/api/milestones/${m.id}`, "PATCH", { task_id })
+                        );
+                        onChanged();
+                      }}
+                    >
+                      <option value="">{t("deliverableNoTask")}</option>
+                      {p.tasks
+                        .filter(
+                          (task) =>
+                            task.id === m.task_id ||
+                            !p.milestones.some((x) => x.task_id === task.id)
+                        )
+                        .map((task) => (
+                          <option key={task.id} value={task.id}>
+                            {task.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                   <span
                     className={`text-[16px] ${
                       overdue

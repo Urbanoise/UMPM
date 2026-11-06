@@ -61,6 +61,37 @@ await sql`
 `;
 // CREATE TABLE IF NOT EXISTS leaves a table from before this column as it was.
 await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS note TEXT`;
+// The explicit link replaces matching by name. Same-named pairs are carried over
+// once, when the column first appears, so a later run cannot undo a deliberate
+// unlink.
+const [{ linked_before }] = await sql`
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'milestones' AND column_name = 'task_id'
+  ) AS linked_before
+`;
+await sql`
+  ALTER TABLE milestones ADD COLUMN IF NOT EXISTS task_id INTEGER
+    REFERENCES tasks(id) ON DELETE SET NULL
+`;
+await sql`
+  CREATE UNIQUE INDEX IF NOT EXISTS milestones_task_id_key ON milestones (task_id)
+`;
+if (!linked_before) {
+  const linked = await sql`
+    WITH pair AS (
+      SELECT MIN(m.id) AS milestone_id, MIN(t.id) AS task_id
+        FROM milestones m
+        JOIN tasks t ON t.project_id = m.project_id AND t.name = m.name
+       GROUP BY m.project_id, m.name
+    )
+    UPDATE milestones SET task_id = pair.task_id
+      FROM pair
+     WHERE milestones.id = pair.milestone_id
+    RETURNING milestones.id
+  `;
+  console.log(`linked ${linked.length} same-named deliverable(s) to their tasks`);
+}
 await sql`
   CREATE TABLE IF NOT EXISTS task_categories (
     id   SERIAL PRIMARY KEY,

@@ -5,10 +5,10 @@ import type { Project } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 
 /**
- * The multi-select project filter shared by the timeline and the two overview
- * panels. Dashboard owns the value, so ticking projects in any one of them
- * narrows all three and the stat tiles; an empty set means "all projects". Each
- * panel passes the
+ * The multi-select project filter shared by the timeline, the two overview
+ * panels and the calendar. Dashboard owns the value, so ticking projects in any
+ * one of them narrows all four and the stat tiles; an empty set means "all
+ * projects". Each panel passes the
  * ids it can actually show as `relevant` so its own list never offers an
  * option that filters down to nothing there.
  */

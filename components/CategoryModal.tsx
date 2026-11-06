@@ -2,10 +2,16 @@
 
 import { useState } from "react";
 import type { Project, TaskCategory } from "@/lib/types";
-import { TASK_STATUSES, categoryIdOf, categoryStatus } from "@/lib/types";
+import { categoryIdOf, categoryStatus } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
-import { statusColor, statusLabel, statusOrder } from "@/lib/taskStatus";
+import {
+  isBuiltinStatusName,
+  statusColor,
+  statusLabel,
+  statusOrder,
+} from "@/lib/taskStatus";
 import type { TrackEdit } from "@/lib/undo";
+import { AddCategoryForm } from "./AddCategory";
 
 const NAME_MAX = 40;
 
@@ -80,45 +86,10 @@ export default function CategoryModal({
   onClose: () => void;
 }) {
   const { t } = useLang();
-  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  // The server knows the other custom names; the built-in ones are only
-  // translations, so they are checked here, in the language on screen.
-  const isBuiltinName = (value: string) =>
-    TASK_STATUSES.some(
-      (s) => t(`tstatus_${s}`).toLowerCase() === value.toLowerCase()
-    );
-
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    const next = name.trim();
-    if (!next) return;
-    if (isBuiltinName(next)) {
-      setError(t("errCategoryExists"));
-      return;
-    }
-    setError(null);
-    setSaving(true);
-    try {
-      const res = await send("/api/task-categories", "POST", { name: next });
-      if (res.status === 400) {
-        setError(t("errCategoryExists"));
-        return;
-      }
-      if (!res.ok) throw new Error(res.statusText);
-      setName("");
-      onChanged();
-    } catch {
-      setError(t("errSave"));
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function rename(category: TaskCategory, next: string) {
-    if (isBuiltinName(next)) {
+    if (isBuiltinStatusName(next, t)) {
       setError(t("errCategoryExists"));
       return false;
     }
@@ -197,24 +168,9 @@ export default function CategoryModal({
           })}
         </ul>
 
-        <form onSubmit={add} className="mt-4 flex gap-2">
-          <input
-            className="min-w-0 flex-1"
-            value={name}
-            maxLength={NAME_MAX}
-            placeholder={t("newCategoryName")}
-            aria-label={t("newCategoryName")}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-          />
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={saving || !name.trim()}
-          >
-            {t("addCategory")}
-          </button>
-        </form>
+        <div className="mt-4">
+          <AddCategoryForm onAdded={onChanged} />
+        </div>
 
         {error && (
           <p role="alert" className="mt-3 text-sm text-[var(--status-critical)]">

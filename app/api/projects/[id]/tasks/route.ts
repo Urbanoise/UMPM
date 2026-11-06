@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
-import { isTaskStatus, projectExists } from "@/lib/queries";
+import { isTaskStatus, linkSameNamed, projectExists } from "@/lib/queries";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -26,5 +26,6 @@ export async function POST(req: Request, { params }: Params) {
       assignee?.trim() || null,
     ]
   );
+  await linkSameNamed(projectId, name.trim());
   return NextResponse.json({ id: row!.id }, { status: 201 });
 }

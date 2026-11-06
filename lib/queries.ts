@@ -44,9 +44,9 @@ export async function rehomeOrphanedTasks() {
   );
 }
 
-// Tasks and deliverables that share a name within a project are one commitment
-// seen twice (see lib/linked.ts), so a date or completion written on either side
-// propagates to the other. Both helpers run right after the row they follow has
+// A task and the deliverable pointing at it through milestones.task_id are one
+// commitment seen twice (see lib/linked.ts), so a date or completion written on
+// either side propagates to the other. Both helpers run right after the row they follow has
 // been updated.
 //
 // Completion maps task status 'done' <-> milestones.done = 1. Un-ticking a
@@ -64,8 +64,7 @@ export async function syncDeliverablesFromTasks(taskIds: number[]) {
             done     = CASE WHEN t.status = 'done' THEN 1 ELSE 0 END
        FROM tasks t
       WHERE t.id IN (${placeholders})
-        AND m.project_id = t.project_id
-        AND m.name = t.name
+        AND m.task_id = t.id
         AND (m.due_date IS DISTINCT FROM COALESCE(t.end_date, m.due_date)
              OR m.done <> CASE WHEN t.status = 'done' THEN 1 ELSE 0 END)`,
     taskIds
@@ -81,11 +80,34 @@ export async function syncTaskFromDeliverable(milestoneId: number) {
                             ELSE t.status END
        FROM milestones m
       WHERE m.id = $1
-        AND t.project_id = m.project_id
-        AND t.name = m.name
+        AND t.id = m.task_id
         AND (t.end_date IS DISTINCT FROM m.due_date
              OR (m.done = 1) <> (t.status = 'done'))`,
     [milestoneId]
+  );
+}
+
+/**
+ * A task and a deliverable created under one name are the same commitment, so
+ * new rows link themselves; contract import relies on this. Only creation calls
+ * it (one name, or a whole new project), so an unlinked pair stays unlinked.
+ */
+export async function linkSameNamed(projectId: number, name?: string) {
+  await query(
+    `WITH pair AS (
+       SELECT MIN(m.id) AS milestone_id, MIN(t.id) AS task_id
+         FROM milestones m
+         JOIN tasks t ON t.project_id = m.project_id AND t.name = m.name
+        WHERE m.project_id = $1
+          AND ($2::text IS NULL OR m.name = $2)
+          AND m.task_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM milestones x WHERE x.task_id = t.id)
+        GROUP BY m.name
+     )
+     UPDATE milestones SET task_id = pair.task_id
+       FROM pair
+      WHERE milestones.id = pair.milestone_id`,
+    [projectId, name ?? null]
   );
 }
 

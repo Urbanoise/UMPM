@@ -22,6 +22,7 @@ const INT_COLUMNS = new Set([
   "sort_order",
   "tentative",
   "done",
+  "task_id",
 ]);
 
 function isFields(value: unknown): value is Fields {
@@ -131,7 +132,7 @@ export async function POST(req: Request) {
   await rehomeOrphanedTasks();
 
   // A complete restore leaves linked pairs matching already. These matter when
-  // one side of a pair was skipped, or a rename re-points a link.
+  // one side of a pair was skipped.
   const updated = written.filter((r) => r.from && r.to);
   await syncDeliverablesFromTasks(
     updated.filter((r) => r.table === "tasks").map((r) => r.id)
@@ -153,7 +154,7 @@ export async function POST(req: Request) {
     const pairs = await query<{ task_id: number; milestone_id: number }>(
       `SELECT t.id AS task_id, m.id AS milestone_id
          FROM tasks t
-         JOIN milestones m ON m.project_id = t.project_id AND m.name = t.name
+         JOIN milestones m ON m.task_id = t.id
         WHERE t.id = ANY($1::int[]) OR m.id = ANY($2::int[])`,
       [addedTasks, addedMilestones]
     );

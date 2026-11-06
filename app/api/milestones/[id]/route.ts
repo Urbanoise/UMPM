@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
-import { syncTaskFromDeliverable } from "@/lib/queries";
+import { query, queryOne } from "@/lib/db";
+import {
+  syncDeliverablesFromTasks,
+  syncTaskFromDeliverable,
+} from "@/lib/queries";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -11,6 +14,27 @@ export async function PATCH(req: Request, { params }: Params) {
   if (body.name !== undefined) fields.name = String(body.name).trim();
   if (body.due_date !== undefined) fields.due_date = body.due_date;
   if (body.done !== undefined) fields.done = body.done ? 1 : 0;
+  if (body.task_id !== undefined) {
+    const taskId = body.task_id === null ? null : Number(body.task_id);
+    if (taskId !== null) {
+      const task = await queryOne<{ taken: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM milestones x WHERE x.task_id = t.id AND x.id <> m.id
+         ) AS taken
+           FROM tasks t
+           JOIN milestones m ON m.project_id = t.project_id
+          WHERE t.id = $1 AND m.id = $2`,
+        [taskId, id]
+      );
+      if (!task || task.taken) {
+        return NextResponse.json(
+          { error: "task is in another project or already has a deliverable" },
+          { status: 400 }
+        );
+      }
+    }
+    fields.task_id = taskId;
+  }
   if (Object.keys(fields).length === 0) {
     return NextResponse.json({ error: "no valid fields" }, { status: 400 });
   }
@@ -22,10 +46,14 @@ export async function PATCH(req: Request, { params }: Params) {
     ...values,
     id,
   ]);
-  // A rename can link the deliverable to a different task, so re-sync on that too.
+  // On linking the task's schedule wins, and the deliverable lands on its end
+  // date; the second sync only matters for a task that had no end date yet.
+  if (typeof fields.task_id === "number") {
+    await syncDeliverablesFromTasks([fields.task_id]);
+  }
   if (
     fields.due_date !== undefined ||
-    fields.name !== undefined ||
+    fields.task_id !== undefined ||
     fields.done !== undefined
   ) {
     await syncTaskFromDeliverable(id);

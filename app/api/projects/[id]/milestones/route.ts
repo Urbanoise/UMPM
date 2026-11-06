@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { queryOne } from "@/lib/db";
-import { projectExists } from "@/lib/queries";
+import { linkSameNamed, projectExists } from "@/lib/queries";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -20,5 +20,6 @@ export async function POST(req: Request, { params }: Params) {
     "INSERT INTO milestones (project_id, name, due_date) VALUES ($1, $2, $3) RETURNING id",
     [projectId, name.trim(), due_date]
   );
+  await linkSameNamed(projectId, name.trim());
   return NextResponse.json({ id: row!.id }, { status: 201 });
 }

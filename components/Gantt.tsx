@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { deliverableOf } from "@/lib/linked";
 import type { Milestone, Project, Task, TaskCategory } from "@/lib/types";
 import { isStarted, statusLabel } from "@/lib/taskStatus";
 import { fmtDate, parseDate, todayStr, shiftDate } from "@/lib/dates";
@@ -204,9 +205,16 @@ export default function Gantt({
   const gutter = columns.name + columns.due; // everything left of the chart area
   const chartW = width - gutter - RIGHT_PAD;
 
-  // the selected project expands to show its dated tasks as sub-rows
+  // The selected project expands to show its dated tasks as sub-rows, then any
+  // deliverable no sub-row carries; a linked pair shares the task's row.
   const rows = useMemo(() => {
-    const out: { p: Project; tasks: Task[]; yTop: number; h: number }[] = [];
+    const out: {
+      p: Project;
+      tasks: Task[];
+      deliverables: Milestone[];
+      yTop: number;
+      h: number;
+    }[] = [];
     let yTop = TOP;
     for (const source of projects) {
       const p = withBarDrag(source, bar);
@@ -214,8 +222,12 @@ export default function Gantt({
         p.id === selectedId
           ? p.tasks.filter((task) => task.start_date || task.end_date)
           : [];
-      const h = ROW_H + tasks.length * TASK_ROW_H;
-      out.push({ p, tasks, yTop, h });
+      const deliverables =
+        p.id === selectedId
+          ? p.milestones.filter((m) => !tasks.some((x) => x.id === m.task_id))
+          : [];
+      const h = ROW_H + (tasks.length + deliverables.length) * TASK_ROW_H;
+      out.push({ p, tasks, deliverables, yTop, h });
       yTop += h;
     }
     return out;
@@ -483,9 +495,13 @@ export default function Gantt({
   function taskTip(p: Project, task: Task) {
     const overdue =
       task.status !== "done" && task.end_date !== null && task.end_date < today;
+    const deliverable = deliverableOf(p, task);
     return (
       <div>
         <div className="font-semibold text-[16px]">{task.name}</div>
+        {deliverable && deliverable.name !== task.name && (
+          <div className="font-medium">◆ {deliverable.name}</div>
+        )}
         <div className="mt-1 text-ink-2">
           {task.start_date && (
             <span className="font-medium text-ink">
@@ -508,6 +524,61 @@ export default function Gantt({
         </div>
         {task.assignee && <div className="text-ink-2">{task.assignee}</div>}
       </div>
+    );
+  }
+
+  // The ring keeps a finished diamond readable on a bar of its own colour.
+  function diamond(m: Milestone, color: string) {
+    const overdue = !m.done && m.due_date < today;
+    return (
+      <>
+        <rect
+          x={-8}
+          y={-8}
+          width={16}
+          height={16}
+          rx={2}
+          transform="rotate(45)"
+          fill="var(--surface-1)"
+        />
+        <rect
+          x={-5.5}
+          y={-5.5}
+          width={11}
+          height={11}
+          rx={1.5}
+          transform="rotate(45)"
+          fill={m.done ? color : "var(--surface-1)"}
+          stroke={overdue ? "var(--status-critical)" : color}
+          strokeWidth={2}
+          paintOrder="stroke"
+        />
+      </>
+    );
+  }
+
+  function diamondHandle(p: Project, m: Milestone, selects: boolean) {
+    return (
+      <circle
+        r={13}
+        fill="transparent"
+        style={{ cursor: bar ? "grabbing" : "grab" }}
+        onClick={() => {
+          if (selects && !dragged.current) onSelect(p.id);
+          dragged.current = false;
+        }}
+        onPointerDown={(e) =>
+          beginBar(e, { kind: "milestone", projectId: p.id, milestone: m }, "move")
+        }
+        onPointerMove={(e) => {
+          e.stopPropagation();
+          moveBar(e);
+          showTip(e, milestoneTip(p, m));
+        }}
+        onPointerUp={endBar}
+        onPointerCancel={() => setBar(null)}
+        onPointerLeave={() => setTip(null)}
+      />
     );
   }
 
@@ -615,7 +686,7 @@ export default function Gantt({
         />
 
         {/* rows */}
-        {rows.map(({ p, tasks, yTop, h }, rowIndex) => {
+        {rows.map(({ p, tasks, deliverables, yTop, h }, rowIndex) => {
           const yMid = yTop + ROW_H / 2;
           const start = parseDate(p.start_date).getTime();
           const end = Math.max(
@@ -792,49 +863,10 @@ export default function Gantt({
               {/* milestones */}
               {p.milestones.map((m) => {
                 const mx = x(parseDate(m.due_date).getTime());
-                const overdue = !m.done && m.due_date < today;
                 return (
                   <g key={m.id} transform={`translate(${mx}, ${yMid})`}>
-                    <rect
-                      x={-5.5}
-                      y={-5.5}
-                      width={11}
-                      height={11}
-                      rx={1.5}
-                      transform="rotate(45)"
-                      fill={m.done ? color : "var(--surface-1)"}
-                      stroke={overdue ? "var(--status-critical)" : color}
-                      strokeWidth={2}
-                      paintOrder="stroke"
-                    />
-                    <circle
-                      r={13}
-                      fill="transparent"
-                      style={{ cursor: bar ? "grabbing" : "grab" }}
-                      onClick={() => {
-                        if (!dragged.current) onSelect(p.id);
-                        dragged.current = false;
-                      }}
-                      onPointerDown={(e) =>
-                        beginBar(
-                          e,
-                          {
-                            kind: "milestone",
-                            projectId: p.id,
-                            milestone: m,
-                          },
-                          "move"
-                        )
-                      }
-                      onPointerMove={(e) => {
-                        e.stopPropagation();
-                        moveBar(e);
-                        showTip(e, milestoneTip(p, m));
-                      }}
-                      onPointerUp={endBar}
-                      onPointerCancel={() => setBar(null)}
-                      onPointerLeave={() => setTip(null)}
-                    />
+                    {diamond(m, color)}
+                    {diamondHandle(p, m, true)}
                   </g>
                 );
               })}
@@ -853,6 +885,7 @@ export default function Gantt({
                 const done = task.status === "done";
                 const overdue =
                   !done && task.end_date !== null && task.end_date < today;
+                const deliverable = deliverableOf(p, task);
                 const tSolidUntil = done
                   ? te
                   : isStarted(task.status)
@@ -941,6 +974,69 @@ export default function Gantt({
                       onFocus={(e) => showTip(e, taskTip(p, task))}
                       onBlur={() => setTip(null)}
                     />
+                    {/* no handle: it would cover the bar's end, which resizes */}
+                    {deliverable && (
+                      <g
+                        transform={`translate(${x(parseDate(deliverable.due_date).getTime())}, ${tMid})`}
+                        pointerEvents="none"
+                      >
+                        {diamond(deliverable, color)}
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* deliverables with no task sub-row (expanded project only) */}
+              {deliverables.map((m, j) => {
+                const rowTop = yTop + ROW_H + (tasks.length + j) * TASK_ROW_H;
+                const tMid = rowTop + TASK_ROW_H / 2;
+                const overdue = !m.done && m.due_date < today;
+                return (
+                  <g key={`deliverable-${m.id}`}>
+                    <text
+                      x={28}
+                      y={tMid + 3.5}
+                      textAnchor="start"
+                      fontSize={14.5}
+                      fill="var(--text-secondary)"
+                    >
+                      {fitText(m.name, nameW - 36, 14.5)}
+                    </text>
+                    <text
+                      x={gutter - 10}
+                      y={tMid + 3.5}
+                      textAnchor="end"
+                      fontSize={14}
+                      fill={
+                        overdue
+                          ? "var(--status-critical)"
+                          : m.done
+                            ? "var(--text-muted)"
+                            : "var(--text-secondary)"
+                      }
+                    >
+                      {fmtDate(m.due_date, locale)}
+                    </text>
+                    <rect
+                      x={0}
+                      y={rowTop}
+                      width={width}
+                      height={TASK_ROW_H}
+                      fill="transparent"
+                      tabIndex={0}
+                      aria-label={m.name}
+                      onPointerMove={(e) => showTip(e, milestoneTip(p, m))}
+                      onPointerLeave={() => setTip(null)}
+                      onFocus={(e) => showTip(e, milestoneTip(p, m))}
+                      onBlur={() => setTip(null)}
+                    />
+                    <g
+                      transform={`translate(${x(parseDate(m.due_date).getTime())}, ${tMid})`}
+                    >
+                      {diamond(m, color)}
+                      {diamondHandle(p, m, false)}
+                    </g>
                   </g>
                 );
               })}

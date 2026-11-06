@@ -37,6 +37,16 @@ export function isStarted(status: TaskStatus) {
   return status !== "todo" && status !== "done";
 }
 
+/**
+ * The server knows the custom names; the built-in ones are only translations,
+ * so a clash with them is checked here, in the language on screen.
+ */
+export function isBuiltinStatusName(value: string, t: T) {
+  return TASK_STATUSES.some(
+    (s) => t(`tstatus_${s}`).toLowerCase() === value.toLowerCase()
+  );
+}
+
 export function statusLabel(
   status: TaskStatus,
   categories: TaskCategory[],

@@ -1,5 +1,5 @@
 import type { Milestone, Project, Task } from "./types";
-import { deliverableNames } from "./linked";
+import { linkedTaskIds, taskOf } from "./linked";
 import { daysBetween, shiftDate } from "./dates";
 import { splitAssignees } from "./assignees";
 
@@ -41,7 +41,7 @@ export function withTaskChange(
     tasks: p.tasks.map((x) => (x.id === taskId ? { ...x, ...fields } : x)),
     milestones: end
       ? p.milestones.map((m) =>
-          m.name === task.name ? { ...m, due_date: end } : m
+          m.task_id === taskId ? { ...m, due_date: end } : m
         )
       : p.milestones,
   };
@@ -56,7 +56,7 @@ export function withDeliverableDate(
   milestone: Milestone,
   date: string
 ): Project {
-  const linked = p.tasks.find((x) => x.name === milestone.name);
+  const linked = taskOf(p, milestone);
   if (linked) return withTaskChange(p, linked.id, withDeadline(linked, date));
   return {
     ...p,
@@ -122,11 +122,10 @@ export type CalendarSpan = {
 export function calendarSpans(projects: Project[]): CalendarSpan[] {
   const out: CalendarSpan[] = [];
   for (const p of projects) {
-    const linked = deliverableNames(p);
+    const linked = linkedTaskIds(p);
     const dated = p.tasks.filter((task) => task.end_date);
-    const taskNames = new Set(dated.map((task) => task.name));
     for (const m of p.milestones) {
-      if (taskNames.has(m.name)) continue; // drawn as its task below
+      if (dated.some((task) => task.id === m.task_id)) continue; // drawn as its task below
       out.push({
         key: `m${m.id}`,
         kind: "milestone",
@@ -143,7 +142,7 @@ export function calendarSpans(projects: Project[]): CalendarSpan[] {
       const start = task.start_date ?? end;
       out.push({
         key: `t${task.id}`,
-        kind: linked.has(task.name) ? "milestone" : "task",
+        kind: linked.has(task.id) ? "milestone" : "task",
         name: task.name,
         start: start < end ? start : end,
         end,

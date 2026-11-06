@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Project, Task, TaskCategory, TaskStatus } from "@/lib/types";
 import { fmtShortDate, todayStr } from "@/lib/dates";
 import { useLang } from "@/lib/i18n";
-import { deliverableNames } from "@/lib/linked";
+import { linkedTaskIds } from "@/lib/linked";
 import { statusColor, statusLabel, statusOrder } from "@/lib/taskStatus";
 import { seriesVar } from "@/lib/workItems";
 import { KindMark } from "./Deadlines";
@@ -48,11 +48,11 @@ export default function BoardView({
 
   const columns = useMemo(() => {
     const cards: Card[] = projects.flatMap((p) => {
-      const linked = deliverableNames(p);
+      const linked = linkedTaskIds(p);
       return p.tasks.map((task) => ({
         task,
         project: p,
-        linked: linked.has(task.name),
+        linked: linked.has(task.id),
       }));
     });
     return statuses.map((status) => ({

@@ -48,6 +48,7 @@ const STRINGS = {
   categoryName: { ka: "კატეგორიის სახელი", en: "Category name" },
   newCategoryName: { ka: "ახალი კატეგორიის სახელი", en: "New category name" },
   addCategory: { ka: "დამატება", en: "Add" },
+  addCategoryButton: { ka: "კატეგორიის დამატება", en: "Add category" },
   errCategoryExists: {
     ka: "ამ სახელით კატეგორია უკვე არსებობს.",
     en: "A category with this name already exists.",
@@ -207,6 +208,8 @@ const STRINGS = {
     en: "New deliverable",
   },
   newTask: { ka: "ახალი თასქი", en: "New task" },
+  deliverableTask: { ka: "რომელი თასქის შედეგია", en: "Output of task" },
+  deliverableNoTask: { ka: "თასქის გარეშე", en: "No task" },
   assignee: { ka: "შემსრულებელი", en: "Assignee" },
   add: { ka: "დამატება", en: "Add" },
   taskStart: { ka: "თასქის დაწყება", en: "Task start date" },

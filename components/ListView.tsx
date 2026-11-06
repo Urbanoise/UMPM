@@ -8,6 +8,7 @@ import type {
   TaskCategory,
   TaskStatus,
 } from "@/lib/types";
+import { linkedTaskIds } from "@/lib/linked";
 import { fmtDate, todayStr } from "@/lib/dates";
 import { useLang, type StrKey } from "@/lib/i18n";
 import { statusColor, statusLabel, statusOrder } from "@/lib/taskStatus";
@@ -78,8 +79,7 @@ export default function ListView({
   const rows = useMemo(() => {
     const rows: Row[] = [];
     for (const p of projects) {
-      const taskNames = new Set(p.tasks.map((task) => task.name));
-      const deliverables = new Set(p.milestones.map((m) => m.name));
+      const linked = linkedTaskIds(p);
       for (const task of p.tasks) {
         rows.push({
           key: `t${task.id}`,
@@ -89,12 +89,12 @@ export default function ListView({
           start: task.start_date,
           end: task.end_date,
           status: task.status,
-          isDeliverable: deliverables.has(task.name),
+          isDeliverable: linked.has(task.id),
           task,
         });
       }
       for (const m of p.milestones) {
-        if (taskNames.has(m.name)) continue;
+        if (m.task_id !== null) continue;
         rows.push({
           key: `m${m.id}`,
           name: m.name,

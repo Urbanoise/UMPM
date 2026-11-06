@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { queryOne, transaction } from "@/lib/db";
-import { nextProjectPlacement } from "@/lib/queries";
+import { linkSameNamed, nextProjectPlacement } from "@/lib/queries";
 import { PROJECT_STATUSES, TASK_STATUSES } from "@/lib/types";
 
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -101,6 +101,7 @@ export async function POST(req: Request) {
       ],
     })),
   ]);
+  await linkSameNamed(id);
 
   return NextResponse.json(
     {

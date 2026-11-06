@@ -23,7 +23,7 @@ export const UNDO_COLUMNS = {
     "sort_order",
   ],
   tasks: ["name", "start_date", "end_date", "status", "assignee", "note"],
-  milestones: ["name", "due_date", "done"],
+  milestones: ["name", "due_date", "done", "task_id"],
   task_categories: ["name"],
 } as const;
 

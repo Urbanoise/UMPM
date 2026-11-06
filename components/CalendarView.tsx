@@ -6,11 +6,10 @@ import {
   daysBetween,
   fmtDate,
   fmtMonthYear,
-  monthCells,
+  monthWeeks,
   shiftDate,
   todayStr,
   weekdayInitials,
-  ymd,
 } from "@/lib/dates";
 import { useCanEdit } from "@/lib/access";
 import { useLang } from "@/lib/i18n";
@@ -87,19 +86,7 @@ export default function CalendarView({
   );
   const weekdays = useMemo(() => weekdayInitials(locale), [locale]);
 
-  const weeks = useMemo(() => {
-    const cells = monthCells(year, monthIndex);
-    while (cells.length % 7 !== 0) cells.push(null);
-    const out: (string | null)[][] = [];
-    for (let i = 0; i < cells.length; i += 7) {
-      out.push(
-        cells
-          .slice(i, i + 7)
-          .map((day) => (day === null ? null : ymd(year, monthIndex, day)))
-      );
-    }
-    return out;
-  }, [year, monthIndex]);
+  const weeks = useMemo(() => monthWeeks(year, monthIndex), [year, monthIndex]);
 
   function goTo(value: string) {
     setMonth(value);
@@ -111,8 +98,8 @@ export default function CalendarView({
     goTo(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   }
 
-  // the date in a week's row under the pointer, null on a blank cell
-  function dayAt(row: Element, clientX: number, days: (string | null)[]) {
+  // the date in a week's row under the pointer
+  function dayAt(row: Element, clientX: number, days: string[]) {
     const rect = row.getBoundingClientRect();
     const column = Math.floor(((clientX - rect.left) / rect.width) * 7);
     return days[Math.min(Math.max(column, 0), 6)];
@@ -130,7 +117,7 @@ export default function CalendarView({
 
   function bar(
     { span, from, to, lane, continuesBefore, continuesAfter }: WeekSegment,
-    days: (string | null)[]
+    days: string[]
   ) {
     const overdue = !span.done && span.end < today;
     const color = seriesVar(span.project.color_slot);
@@ -159,10 +146,7 @@ export default function CalendarView({
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("text/plain", span.name);
           const row = e.currentTarget.parentElement!;
-          setDragging({
-            span,
-            grabbed: dayAt(row, e.clientX, days) ?? span.end,
-          });
+          setDragging({ span, grabbed: dayAt(row, e.clientX, days) });
         }}
         onDragEnd={() => {
           setDragging(null);
@@ -262,7 +246,7 @@ export default function CalendarView({
               FIRST_LANE_ROW + (expanded ? lanes : VISIBLE_LANES);
             return (
               <div
-                key={days.find(Boolean)}
+                key={days[0]}
                 data-calendar-week={w}
                 className={`relative ${
                   w < weeks.length - 1 ? "border-b border-edge" : ""
@@ -270,7 +254,7 @@ export default function CalendarView({
                 onDragOver={(e) => {
                   if (!dragging) return;
                   const date = dayAt(e.currentTarget, e.clientX, days);
-                  if (!date || date === dragging.grabbed) {
+                  if (date === dragging.grabbed) {
                     setOverDay(null);
                     return;
                   }
@@ -284,13 +268,12 @@ export default function CalendarView({
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
-                  const date = dayAt(e.currentTarget, e.clientX, days);
-                  if (date) drop(date);
+                  drop(dayAt(e.currentTarget, e.clientX, days));
                   setDragging(null);
                   setOverDay(null);
                 }}
               >
-                {/* column lines and blanks, behind the bars */}
+                {/* column lines and the gray of other months, behind the bars */}
                 <div
                   className="absolute inset-0 grid grid-cols-7"
                   aria-hidden
@@ -299,10 +282,10 @@ export default function CalendarView({
                     <div
                       key={c}
                       className={`${c < 6 ? "border-r border-edge" : ""} ${
-                        date === null ? "bg-[var(--gridline)]/25" : ""
+                        date.startsWith(month) ? "" : "bg-[var(--gridline)]/25"
                       }`}
                       style={
-                        date !== null && date === overDay
+                        date === overDay
                           ? { boxShadow: "inset 0 0 0 2px var(--accent)" }
                           : undefined
                       }
@@ -312,13 +295,17 @@ export default function CalendarView({
 
                 <div className="relative grid min-h-24 grid-cols-7 content-start gap-y-0.5 pb-1">
                   {days.map((date, c) => {
-                    if (date === null) return null;
                     const isToday = date === today;
+                    const inMonth = date.startsWith(month);
                     return (
                       <div
                         key={date}
                         className={`m-1 mb-0.5 flex h-5 w-5 items-center justify-center rounded-full text-xs tabular-nums ${
-                          isToday ? "font-semibold text-white" : "text-ink-2"
+                          isToday
+                            ? "font-semibold text-white"
+                            : inMonth
+                              ? "text-ink-2"
+                              : "text-ink-3"
                         }`}
                         style={{
                           gridColumn: c + 1,

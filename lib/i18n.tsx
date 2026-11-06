@@ -387,16 +387,13 @@ const STRINGS = {
   outboxTitle: { ka: "გასაგზავნი შეტყობინებები", en: "Emails to send" },
   outboxClose: { ka: "დახურვა", en: "Close" },
   outboxHint: {
-    ka: "ახალი დავალებების ელფოსტა მხოლოდ აქედან იგზავნება. მოხსენი მონიშვნა იმას, რაც მხოლოდ ტესტი იყო.",
-    en: "Emails about new assignments go out only from here. Untick anything that was only a test.",
+    ka: "ახალი დავალებების ელფოსტა მხოლოდ აქედან იგზავნება.",
+    en: "Emails about new assignments go out only from here.",
   },
   outboxEmpty: { ka: "გასაგზავნი არაფერია.", en: "Nothing to send." },
   outboxSend: { ka: "გაგზავნა ({n})", en: "Send ({n})" },
   outboxDontSend: { ka: "არ გაიგზავნოს ({n})", en: "Don't send ({n})" },
-  outboxNoAddress: {
-    ka: "ელფოსტის მისამართი არ არის: {names}",
-    en: "No email address for: {names}",
-  },
+  outboxCancelOne: { ka: "გაუქმება: {name}", en: "Cancel email to {name}" },
   outboxMailOff: {
     ka: "ელფოსტა ჯერ არ არის გამართული, ამიტომ გაგზავნა შეუძლებელია.",
     en: "Email is not set up yet, so nothing can be sent.",

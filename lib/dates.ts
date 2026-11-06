@@ -90,14 +90,20 @@ export function ymd(y: number, m: number, d: number): string {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-/** Days of a month laid out Monday-first, null for the blanks before the 1st. */
-export function monthCells(year: number, month: number): (number | null)[] {
+/**
+ * The Monday-to-Sunday weeks covering a month, as YYYY-MM-DD dates. The first
+ * and last weeks run into the neighbouring months, so every row has seven days.
+ */
+export function monthWeeks(year: number, month: number): string[][] {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // 0 = Monday
-  return [
-    ...Array.from({ length: firstWeekday }, () => null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
+  const weekCount = Math.ceil((firstWeekday + daysInMonth) / 7);
+  return Array.from({ length: weekCount }, (_, week) =>
+    Array.from({ length: 7 }, (_, column) => {
+      const d = new Date(year, month, 1 - firstWeekday + week * 7 + column);
+      return ymd(d.getFullYear(), d.getMonth(), d.getDate());
+    })
+  );
 }
 
 /** A YYYY-MM-DD date moved by whole days, in local time. */

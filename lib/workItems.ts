@@ -172,18 +172,16 @@ function segmentRank(s: Omit<WeekSegment, "lane">) {
 
 /**
  * The parts of `spans` that fall in one calendar row, each placed in the first
- * lane where it overlaps nothing. `days` holds the row's seven dates, null for
- * the blanks outside the month, so a span crossing into another month is cut
- * at the edge and flagged as continuing.
+ * lane where it overlaps nothing. `days` holds the row's seven dates, and a
+ * span crossing into another row is cut at the edge and flagged as continuing.
  */
 export function weekSegments(
   spans: CalendarSpan[],
-  days: (string | null)[]
+  days: string[]
 ): WeekSegment[] {
-  const columns = days.flatMap((date, col) => (date ? [{ date, col }] : []));
-  if (columns.length === 0) return [];
-  const first = columns[0].date;
-  const last = columns[columns.length - 1].date;
+  const columns = days.map((date, col) => ({ date, col }));
+  const first = days[0];
+  const last = days[days.length - 1];
 
   const parts = spans
     .filter((s) => s.start <= last && s.end >= first)

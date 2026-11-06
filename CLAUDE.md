@@ -112,7 +112,10 @@ what went out per person and item, so bulk edits, contract import, undo and retr
 need no special cases, and a moved deadline earns a new reminder because its row
 includes the date. Assignments never mail by themselves, so that testing on the
 dashboard reaches nobody: they wait in `OutboxModal` (`/api/notifications`) until a
-PM sends or dismisses them, and one that is changed back just leaves the list. No
+PM sends or dismisses them, together or with a row's ✕, and one that is changed back
+just leaves the list. A person gets one mail per project: Send takes along any
+reminder owed on that person's project and records it, so the daily run doesn't
+repeat it, but a reminder never starts a mail on Send. No
 route that writes tasks should send mail. Reminders are automatic:
 `/api/cron/notifications` runs daily from `vercel.json` (05:00 UTC, 09:00 in
 Tbilisi) and takes `?dry=1` to report without sending or recording. Only a task's assignees are mailed, so

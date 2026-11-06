@@ -22,15 +22,11 @@ const Body = z.object({
 export async function GET() {
   try {
     return NextResponse.json({
-      ...(await pendingAssignments()),
+      items: await pendingAssignments(),
       mailEnabled: mailEnabled(),
     });
   } catch {
-    return NextResponse.json({
-      items: [],
-      unknownPeople: [],
-      mailEnabled: false,
-    });
+    return NextResponse.json({ items: [], mailEnabled: false });
   }
 }
 

@@ -17,6 +17,11 @@ export const REMINDER_WORKING_DAYS = 3;
 // dashboard's outbox calls, so trying things out on the dashboard reaches nobody,
 // and an assignment that is changed back simply stops being owed. Deadline
 // reminders go out by themselves from the daily run.
+//
+// A person gets one mail per project, however many things it says. Assignments
+// still wait for the PM, so a daily mail only ever holds reminders, but pressing
+// Send takes along any reminder owed on that person's project, which then isn't
+// sent again.
 type Kind = "assigned" | "deadline";
 
 interface Notice {
@@ -24,6 +29,7 @@ interface Notice {
   item: string; // "t12"
   name: string; // the person as written on the task
   due: string; // the deadline a reminder is about, "" on an assignment
+  project_id: number;
   project: string;
   title: string;
   deadline: string | null;
@@ -43,6 +49,7 @@ interface TaskRow {
   end_date: string | null;
   note: string | null;
   assignee: string | null;
+  project_id: number;
   project: string;
   project_status: string;
   tentative: number;
@@ -50,8 +57,8 @@ interface TaskRow {
 
 const openTasks = () =>
   query<TaskRow>(
-    `SELECT t.id, t.name, t.end_date, t.note, t.assignee, p.name AS project,
-            p.status AS project_status, p.tentative
+    `SELECT t.id, t.name, t.end_date, t.note, t.assignee, p.id AS project_id,
+            p.name AS project, p.status AS project_status, p.tentative
        FROM tasks t JOIN projects p ON p.id = t.project_id
       WHERE t.status <> 'done' AND p.status <> 'done'`
   );
@@ -80,6 +87,7 @@ function assignmentNotices(tasks: TaskRow[]): Notice[] {
       item: `t${task.id}`,
       name,
       due: "",
+      project_id: task.project_id,
       project: task.project,
       title: task.name,
       deadline: task.end_date,
@@ -108,6 +116,7 @@ function deadlineNotices(tasks: TaskRow[], today: string): Notice[] {
         item: `t${task.id}`,
         name,
         due: task.end_date,
+        project_id: task.project_id,
         project: task.project,
         title: task.name,
         deadline: task.end_date,
@@ -137,47 +146,69 @@ function dashboardUrl(): string | null {
 function deadlineText(notice: Notice, today: string) {
   if (!notice.deadline) return "ვადის გარეშე / no deadline";
   const date = fmtDate(notice.deadline, "ka-GE");
-  if (notice.kind === "assigned") return date;
+  if (!dueSoon(notice.deadline, today)) return date;
   const left = workingDaysUntil(today, notice.deadline);
   return left === 0
     ? `${date} (დღეს / today)`
     : `${date} (${left} სამუშაო დღე / ${left} working day${left === 1 ? "" : "s"})`;
 }
 
-function renderMail(kind: Kind, person: Person, items: Notice[], today: string) {
-  const assigned = kind === "assigned";
-  const subject = assigned
-    ? items.length === 1
-      ? `ახალი დავალება: ${items[0].title}`
-      : `ახალი დავალებები (${items.length})`
-    : items.length === 1
-      ? `მოახლოებული ვადა: ${items[0].title}`
-      : `მოახლოებული ვადები (${items.length})`;
-  const intro = assigned
-    ? "თქვენ დაგენიშნათ დავალება. / You have been assigned the following."
-    : `ვადა იწურება ${REMINDER_WORKING_DAYS} სამუშაო დღის განმავლობაში. / Due within ${REMINDER_WORKING_DAYS} working days.`;
+const countLabel = (list: Notice[], one: string, many: string) =>
+  list.length === 0
+    ? null
+    : list.length === 1
+      ? one
+      : `${many} (${list.length})`;
+
+/** One project's news for one person. All `items` share that project. */
+function renderMail(person: Person, items: Notice[], today: string) {
+  const project = items[0].project;
+  const assigned = items.filter((n) => n.kind === "assigned");
+  // A new task that is also due soon is listed once, with its countdown.
+  const isNew = new Set(assigned.map((n) => n.item));
+  const reminders = items.filter(
+    (n) => n.kind === "deadline" && !isNew.has(n.item)
+  );
+
+  const summary = [
+    countLabel(assigned, "ახალი დავალება", "ახალი დავალებები"),
+    countLabel(reminders, "მოახლოებული ვადა", "მოახლოებული ვადები"),
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const listed = [...assigned, ...reminders];
+  const subject =
+    listed.length === 1
+      ? `${project}: ${summary}: ${listed[0].title}`
+      : `${project}: ${summary}`;
 
   const cell =
     'style="padding:8px 12px;border-bottom:1px solid #e5e5e5;vertical-align:top"';
-  const rows = items
-    .map((n) => {
-      const note = n.note
-        ? `<br><span style="color:#666">${escapeHtml(n.note)}</span>`
-        : "";
-      return `<tr>
-        <td ${cell}><strong>${escapeHtml(n.title)}</strong><br><span style="color:#666">${escapeHtml(n.project)}</span>${note}</td>
+  const section = (intro: string, list: Notice[]) => {
+    if (list.length === 0) return "";
+    const rows = list
+      .map((n) => {
+        const note = n.note
+          ? `<br><span style="color:#666">${escapeHtml(n.note)}</span>`
+          : "";
+        return `<tr>
+        <td ${cell}><strong>${escapeHtml(n.title)}</strong>${note}</td>
         <td ${cell}>${escapeHtml(deadlineText(n, today))}</td>
       </tr>`;
-    })
-    .join("");
+      })
+      .join("");
+    return `<p>${escapeHtml(intro)}</p>
+    <table style="border-collapse:collapse;width:100%;max-width:640px">${rows}</table>`;
+  };
   const url = dashboardUrl();
   const link = url
     ? `<p><a href="${escapeHtml(url)}" style="color:#db4536">გახსენი დაფა / Open the dashboard</a></p>`
     : "";
   const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
     <p>${escapeHtml(person.first_name)},</p>
-    <p>${escapeHtml(intro)}</p>
-    <table style="border-collapse:collapse;width:100%;max-width:640px">${rows}</table>
+    <p><strong>${escapeHtml(project)}</strong></p>
+    ${section("თქვენ დაგენიშნათ დავალება. / You have been assigned the following.", assigned)}
+    ${section(`ვადა იწურება ${REMINDER_WORKING_DAYS} სამუშაო დღის განმავლობაში. / Due within ${REMINDER_WORKING_DAYS} working days.`, reminders)}
     ${link}
   </div>`;
   return { subject, html };
@@ -201,17 +232,22 @@ const release = (n: Notice) =>
     [n.kind, n.item, n.name, n.due]
   );
 
-/** Sends one mail per person, recording each item before its mail goes out. */
+/**
+ * Sends one mail per person and project, recording each item before its mail
+ * goes out. `alongside` joins a mail that is already going and never starts one.
+ */
 async function deliver(
-  kind: Kind,
   notices: Notice[],
   report: NotificationReport,
   today: string,
-  dryRun: boolean
+  dryRun: boolean,
+  alongside: Notice[] = []
 ) {
   const sent = await alreadySent();
   const find = personFinder(await loadPeople());
-  const byEmail = new Map<string, { person: Person; items: Notice[] }>();
+  const mails = new Map<string, { person: Person; items: Notice[] }>();
+  const mailKey = (person: Person, notice: Notice) =>
+    `${person.email}|${notice.project_id}`;
   // Test mail leaves no record, so the real recipients still get theirs later.
   const record = !dryRun && !mailTestAddress();
   for (const notice of notices) {
@@ -229,12 +265,18 @@ async function deliver(
       continue;
     }
     if (sent.has(noticeKey(notice))) continue;
-    const entry = byEmail.get(person.email) ?? { person, items: [] };
-    entry.items.push(notice);
-    byEmail.set(person.email, entry);
+    const key = mailKey(person, notice);
+    const mail = mails.get(key) ?? { person, items: [] };
+    mail.items.push(notice);
+    mails.set(key, mail);
+  }
+  for (const notice of alongside) {
+    const person = find(notice.name);
+    const mail = person && mails.get(mailKey(person, notice));
+    if (mail && !sent.has(noticeKey(notice))) mail.items.push(notice);
   }
 
-  for (const { person, items } of byEmail.values()) {
+  for (const { person, items } of mails.values()) {
     // Claiming first means two overlapping runs cannot both mail the same item.
     const claimed: Notice[] = [];
     for (const notice of items) {
@@ -243,7 +285,7 @@ async function deliver(
     if (claimed.length === 0) continue;
     if (!dryRun) {
       try {
-        const { subject, html } = renderMail(kind, person, claimed, today);
+        const { subject, html } = renderMail(person, claimed, today);
         await sendMail(person.email, subject, html);
       } catch (error) {
         if (record) await Promise.all(claimed.map(release));
@@ -253,7 +295,7 @@ async function deliver(
     }
     report.sent.push({
       to: person.email,
-      items: claimed.map((n) => `${kind}: ${n.project} / ${n.title}`),
+      items: claimed.map((n) => `${n.kind}: ${n.project} / ${n.title}`),
     });
   }
 }
@@ -273,10 +315,7 @@ export interface PendingAssignment {
 }
 
 /** Assignment emails waiting for a PM. The dashboard reads this: no addresses. */
-export async function pendingAssignments(): Promise<{
-  items: PendingAssignment[];
-  unknownPeople: string[];
-}> {
+export async function pendingAssignments(): Promise<PendingAssignment[]> {
   const [tasks, sent, people] = await Promise.all([
     openTasks(),
     alreadySent(),
@@ -284,13 +323,9 @@ export async function pendingAssignments(): Promise<{
   ]);
   const find = personFinder(people);
   const items: PendingAssignment[] = [];
-  const unknownPeople = new Set<string>();
   for (const notice of assignmentNotices(tasks)) {
     if (notice.muted || sent.has(noticeKey(notice))) continue;
-    if (!find(notice.name)) {
-      unknownPeople.add(notice.name);
-      continue;
-    }
+    if (!find(notice.name)) continue;
     items.push({
       task_id: Number(notice.item.slice(1)),
       name: notice.name,
@@ -299,16 +334,15 @@ export async function pendingAssignments(): Promise<{
       deadline: notice.deadline,
     });
   }
-  return { items, unknownPeople: [...unknownPeople] };
+  return items;
 }
 
 type Selection = Pick<PendingAssignment, "task_id" | "name">[];
 
 /** The picked assignments that are still true, whatever a stale tab asked for. */
-async function selectedNotices(selection: Selection) {
+function selectedNotices(selection: Selection, tasks: TaskRow[]) {
   const wanted = new Set(selection.map((s) => `t${s.task_id}|${s.name}`));
-  const notices = assignmentNotices(await openTasks());
-  return notices.filter(
+  return assignmentNotices(tasks).filter(
     (n) => !n.muted && wanted.has(`${n.item}|${n.name}`)
   );
 }
@@ -318,14 +352,17 @@ export async function sendAssignments(
 ): Promise<NotificationReport> {
   const report = emptyReport();
   if (!mailEnabled()) return report;
-  const notices = await selectedNotices(selection);
-  await deliver("assigned", notices, report, tbilisiToday(), false);
+  const tasks = await openTasks();
+  const today = tbilisiToday();
+  const reminders = deadlineNotices(tasks, today).filter((n) => !n.muted);
+  const notices = selectedNotices(selection, tasks);
+  await deliver(notices, report, today, false, reminders);
   return report;
 }
 
 /** Records the picked assignments as handled, without mailing anyone. */
 export async function dismissAssignments(selection: Selection) {
-  const notices = await selectedNotices(selection);
+  const notices = selectedNotices(selection, await openTasks());
   await Promise.all(notices.map(claim));
   return notices.length;
 }
@@ -338,11 +375,8 @@ export async function runDailyNotifications(
   const report = emptyReport();
   if (!dryRun && !mailEnabled()) return report;
   const tasks = await openTasks();
-  const muted = assignmentNotices(tasks).filter((n) => n.muted);
-  await deliver("assigned", muted, report, today, dryRun);
-  if (isWorkingDay(today)) {
-    const reminders = deadlineNotices(tasks, today);
-    await deliver("deadline", reminders, report, today, dryRun);
-  }
+  const notices = assignmentNotices(tasks).filter((n) => n.muted);
+  if (isWorkingDay(today)) notices.push(...deadlineNotices(tasks, today));
+  await deliver(notices, report, today, dryRun);
   return report;
 }

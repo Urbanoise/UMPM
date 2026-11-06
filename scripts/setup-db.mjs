@@ -98,6 +98,50 @@ await sql`
     name TEXT NOT NULL
   )
 `;
+// The staff directory, filled by scripts/import-people.mjs.
+await sql`
+  CREATE TABLE IF NOT EXISTS people (
+    id            SERIAL PRIMARY KEY,
+    first_name    TEXT NOT NULL,
+    first_name_en TEXT NOT NULL,
+    full_name     TEXT NOT NULL,
+    full_name_en  TEXT NOT NULL,
+    email         TEXT NOT NULL UNIQUE
+  )
+`;
+// What has been mailed to whom (lib/notifications.ts). Assignments that exist
+// when the table first appears count as already told, so switching mail on does
+// not send everyone their whole backlog.
+const [{ notified_before }] = await sql`
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.tables WHERE table_name = 'notifications'
+  ) AS notified_before
+`;
+if (!notified_before) {
+  // One transaction: a table left behind without its seed would never be seeded
+  // by a later run, and the whole backlog would go out as new assignments.
+  const [, seeded] = await sql.transaction([
+    sql`
+      CREATE TABLE notifications (
+        id       SERIAL PRIMARY KEY,
+        kind     TEXT NOT NULL,
+        item     TEXT NOT NULL,
+        person   TEXT NOT NULL,
+        due_date TEXT NOT NULL DEFAULT '',
+        sent_at  TEXT NOT NULL DEFAULT to_char(now(), 'YYYY-MM-DD HH24:MI:SS'),
+        UNIQUE (kind, item, person, due_date)
+      )
+    `,
+    sql`
+      INSERT INTO notifications (kind, item, person)
+      SELECT DISTINCT 'assigned', 't' || t.id, trim(who)
+        FROM tasks t, unnest(string_to_array(t.assignee, ',')) AS who
+       WHERE trim(who) <> ''
+      RETURNING id
+    `,
+  ]);
+  console.log(`marked ${seeded.length} existing assignment(s) as already notified`);
+}
 console.log("schema ready");
 
 if (process.argv.includes("--seed")) {

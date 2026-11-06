@@ -15,6 +15,7 @@ npx tsc --noEmit            # type check on its own
 
 npm run db:setup            # create the Postgres schema (idempotent)
 npm run db:setup -- --seed  # schema + import data/seed.json (skipped if projects has rows)
+npm run people:import       # load the staff directory from Emails.xlsx (gitignored)
 ```
 
 There is no test framework in this project. Verify changes by running `npm run dev`
@@ -29,7 +30,8 @@ query matches before running it.
 
 `DATABASE_URL` must be set — locally in `.env.local` (copy `.env.example`), on
 Vercel by the Neon integration. `ANTHROPIC_API_KEY` is needed only by the
-contract upload route; everything else runs without it. `scripts/setup-db.mjs`
+contract upload route, and `SMTP_USER`, `SMTP_PASS` and `CRON_SECRET` only by email
+notifications; everything else runs without them. `scripts/setup-db.mjs`
 reads `.env.local` itself via `process.loadEnvFile`; Next.js loads it for the app.
 
 ## Architecture
@@ -99,6 +101,34 @@ partial: a key that is `undefined` is left alone, a present-but-empty value
 clears the column. `SET` clauses are built by whitelisting known keys and
 positioning placeholders — follow that shape, never interpolate values. Routes
 return `{ ok: true }`, `{ id }` (201 on create), or `{ error }` with 400/404.
+
+**Email notifications.** `lib/notifications.ts` mails people about assignments
+and about deadlines `REMINDER_WORKING_DAYS` working days away (`lib/workdays.ts`
+holds Georgia's non-working days). Nothing reacts to individual edits: what is owed
+comes from comparing the open work with the `notifications` table, which records
+what went out per person and item, so bulk edits, contract import, undo and retries
+need no special cases, and a moved deadline earns a new reminder because its row
+includes the date. Assignments never mail by themselves, so that testing on the
+dashboard reaches nobody: they wait in `OutboxModal` (`/api/notifications`) until a
+PM sends or dismisses them, and one that is changed back just leaves the list. No
+route that writes tasks should send mail. Reminders are automatic:
+`/api/cron/notifications` runs daily from `vercel.json` (05:00 UTC, 09:00 in
+Tbilisi) and takes `?dry=1` to report without sending or recording. Only a task's assignees are mailed, so
+an unassigned task or a deliverable with no linked task mails nobody, and `responsible`
+plays no part. A tentative project mails nobody either: the daily run records what it
+would have sent, so confirming it sends no catch-up. Names missing from the directory
+are in the run's report.
+
+Assignees are free text, so `personFinder` in `lib/people.ts` matches them against
+the `people` table in any spelling from the workbook, ignoring the Georgian
+nominative `ი`, and an ambiguous name resolves to nobody. The repository is public:
+real addresses belong in `people` and `Emails.xlsx` (gitignored), never in code or
+in an API response; `/api/people` returns first names only. Sending needs
+`SMTP_USER` and `SMTP_PASS`, which are set on Vercel and deliberately not in
+`.env.local`, so local development mails nobody and records nothing even though it
+shares the production database. `MAIL_TEST_TO` sends everything to one inbox and
+records nothing. `db:setup` marks existing assignments as already notified when it
+creates the table, in one transaction, so switching mail on sends no backlog.
 
 **i18n and theme** are both client-side `useSyncExternalStore` stores backed by
 `localStorage` with a custom window event to broadcast changes: `lib/i18n.tsx`

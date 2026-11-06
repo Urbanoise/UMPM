@@ -46,6 +46,7 @@ import ContractUploadModal from "./ContractUploadModal";
 import ExportModal from "./ExportModal";
 import AddCategory from "./AddCategory";
 import CategoryModal from "./CategoryModal";
+import OutboxModal, { type Outbox } from "./OutboxModal";
 import ProjectFilter from "./ProjectFilter";
 import Logo from "./Logo";
 
@@ -171,6 +172,11 @@ async function fetchSnapshot(): Promise<Snapshot> {
   return { projects, categories };
 }
 
+async function fetchOutbox(signal?: AbortSignal): Promise<Outbox | null> {
+  const res = await fetch("/api/notifications", { signal });
+  return res.ok ? res.json() : null;
+}
+
 /** Ctrl+Z in a text box belongs to the box. Checkboxes and selects hold no text. */
 function isTextEntry(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -184,9 +190,13 @@ export default function Dashboard() {
   const { view, setView } = useDashboardView();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [categories, setCategories] = useState<TaskCategory[]>([]);
+  // Staff names, offered in the assignee pickers so that a task is given to a
+  // spelling the mail notifications can match.
+  const [directory, setDirectory] = useState<string[]>([]);
+  const [outbox, setOutbox] = useState<Outbox | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [modal, setModal] = useState<
-    "closed" | "create" | "edit" | "contract" | "export" | "categories"
+    "closed" | "create" | "edit" | "contract" | "export" | "categories" | "outbox"
   >("closed");
   const [editTask, setEditTask] = useState<Task | null>(null);
   // One project filter behind the stat tiles, the timeline, both overview panels
@@ -200,6 +210,22 @@ export default function Dashboard() {
   const [saveFailed, setSaveFailed] = useState(false);
   const [undoNotice, setUndoNotice] = useState<string | null>(null);
   const [canStep, setCanStep] = useState({ undo: false, redo: false });
+
+  useEffect(() => {
+    fetch("/api/people")
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setDirectory)
+      .catch(() => {}); // the pickers still offer the names already in use
+  }, []);
+
+  // Every save ends in a re-read of the projects, so this follows the edits.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOutbox(controller.signal)
+      .then((next) => next && setOutbox(next))
+      .catch(() => {}); // aborted, or the button just keeps its last count
+    return () => controller.abort();
+  }, [projects]);
 
   // Saves and undos run strictly one at a time. Ctrl+Z straight after a drop has
   // to wait for that save, or there would be nothing yet to undo, and the reads
@@ -568,8 +594,9 @@ export default function Dashboard() {
       for (const task of p.tasks)
         for (const name of splitAssignees(task.assignee)) set.add(name);
     }
+    for (const name of directory) set.add(name);
     return [...set].sort();
-  }, [projects]);
+  }, [projects, directory]);
 
   if (projects === null) {
     return <p className="p-8 text-sm text-ink-3">{t("loading")}</p>;
@@ -611,6 +638,11 @@ export default function Dashboard() {
           </div>
           <ThemeToggle />
           <LangToggle />
+          {outbox && outbox.items.length > 0 && (
+            <button className="btn" onClick={() => setModal("outbox")}>
+              {t("outboxButton", { n: String(outbox.items.length) })}
+            </button>
+          )}
           {projects.length > 0 && (
             <button className="btn" onClick={() => setModal("export")}>
               {t("export")}
@@ -818,6 +850,17 @@ export default function Dashboard() {
           projects={projects}
           initialId={selectedId}
           categories={categories}
+          onClose={() => setModal("closed")}
+        />
+      )}
+
+      {modal === "outbox" && outbox && (
+        <OutboxModal
+          outbox={outbox}
+          onChanged={async () => {
+            const next = await fetchOutbox();
+            if (next) setOutbox(next);
+          }}
           onClose={() => setModal("closed")}
         />
       )}

@@ -41,4 +41,7 @@ yarn-error.log*
 next-env.d.ts
 data/
 
+# real staff addresses; this repository is public
+Emails*.xlsx
+
 !.env.example

@@ -49,6 +49,38 @@ Scanned contracts work: Claude reads each PDF page as an image. Word files are
 converted to plain text first, which loses table layout, so a `.docx` whose
 schedule lives in a table is worth exporting to PDF instead.
 
+## Email notifications
+
+People get an email about a new assignment once a PM approves it, and an automatic
+reminder when a deadline is 3 working days away (weekends and Georgian public
+holidays don't count). New assignments collect behind the **To send** button on the
+dashboard, where a PM sends them or marks them not to be sent; they wait there until
+someone does, and an assignment that is changed back disappears by itself. Several items for one person arrive as one email. Only a task's assignees
+are emailed: unassigned tasks, deliverables with no linked task and tentative
+projects send nothing, and confirming a tentative project sends no catch-up.
+
+Names are matched against the staff directory. To change it, edit `Emails.xlsx`
+and run `npm run people:import`. The workbook stays on this machine, because the
+repository is public.
+
+To switch it on:
+
+1. Pick the Google Workspace mailbox that sends the mail (an existing one is
+   fine; replies go to it), turn on 2-Step Verification for it, and create an
+   app password.
+2. Run `npm run db:setup`, then `npm run people:import`. Existing assignments
+   are marked as already notified, so nobody receives a backlog.
+3. In Vercel → Settings → Environment Variables, set `SMTP_USER`, `SMTP_PASS`,
+   a long random `CRON_SECRET`, and `MAIL_TEST_TO` set to your own address. Then
+   deploy.
+4. Preview a run, which sends and records nothing:
+   `curl -H "Authorization: Bearer $CRON_SECRET" "https://<site>/api/cron/notifications?dry=1"`
+5. Assign yourself a task, press **To send**, and check the mail arrives. While
+   `MAIL_TEST_TO` is set a sent item stays in the list, because nothing is recorded.
+   Then remove `MAIL_TEST_TO` and redeploy.
+
+The report lists `unknownPeople`: names on open tasks with no address.
+
 ## Deploying
 
 The app is deployed on Vercel from the GitHub repo — every push to `main` ships.

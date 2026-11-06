@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Project, Task, TaskCategory, TaskStatus } from "@/lib/types";
 import { fmtShortDate, todayStr } from "@/lib/dates";
+import { useCanEdit } from "@/lib/access";
 import { useLang } from "@/lib/i18n";
 import { linkedTaskIds } from "@/lib/linked";
 import { statusColor, statusLabel, statusOrder } from "@/lib/taskStatus";
@@ -38,6 +39,7 @@ export default function BoardView({
   onEditTask: (task: Task) => void;
 }) {
   const { t, locale } = useLang();
+  const canEdit = useCanEdit();
   const today = todayStr();
   const [dragging, setDragging] = useState<Task | null>(null);
   const [overColumn, setOverColumn] = useState<TaskStatus | null>(null);
@@ -138,7 +140,7 @@ export default function BoardView({
                     return (
                       <li
                         key={task.id}
-                        draggable
+                        draggable={canEdit}
                         onDragStart={(e) => {
                           e.dataTransfer.effectAllowed = "move";
                           // Firefox will not start a drag without data set.
@@ -149,7 +151,9 @@ export default function BoardView({
                           setDragging(null);
                           setOverColumn(null);
                         }}
-                        className="group card cursor-grab px-2.5 py-2 active:cursor-grabbing"
+                        className={`group card px-2.5 py-2 ${
+                          canEdit ? "cursor-grab active:cursor-grabbing" : ""
+                        }`}
                         style={{
                           borderLeft: `3px solid ${seriesVar(project.color_slot)}`,
                           opacity: dragging?.id === task.id ? 0.5 : 1,
@@ -200,6 +204,7 @@ export default function BoardView({
                             {/* Dragging has no keyboard or touch equivalent. */}
                             {targets.map(
                               ({ to, glyph }) =>
+                                canEdit &&
                                 to && (
                                   <button
                                     key={to}

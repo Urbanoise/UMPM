@@ -12,6 +12,7 @@ import {
   weekdayInitials,
   ymd,
 } from "@/lib/dates";
+import { useCanEdit } from "@/lib/access";
 import { useLang } from "@/lib/i18n";
 import {
   calendarSpans,
@@ -47,6 +48,7 @@ export default function CalendarView({
   onMoveDeliverable: (milestone: Milestone, date: string) => void;
 }) {
   const { t, locale } = useLang();
+  const canEdit = useCanEdit();
   const today = todayStr();
   const [month, setMonth] = useState(() => today.slice(0, 7)); // YYYY-MM
   const [openWeek, setOpenWeek] = useState<number | null>(null);
@@ -141,9 +143,11 @@ export default function CalendarView({
     return (
       <div
         key={span.key}
-        draggable
+        draggable={canEdit}
         data-calendar-bar={span.key}
-        className="min-w-0 cursor-grab active:cursor-grabbing"
+        className={`min-w-0 ${
+          canEdit ? "cursor-grab active:cursor-grabbing" : ""
+        }`}
         style={{
           gridColumn: `${from + 1} / ${to + 2}`,
           gridRow: lane + FIRST_LANE_ROW,

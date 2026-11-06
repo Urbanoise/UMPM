@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Task, TaskCategory, TaskStatus } from "@/lib/types";
+import { useCanEdit } from "@/lib/access";
 import { useLang } from "@/lib/i18n";
 import { normalizeAssignees } from "@/lib/assignees";
 import { statusLabel, statusOrder } from "@/lib/taskStatus";
@@ -24,6 +25,7 @@ export default function TaskFormModal({
   track: TrackEdit;
 }) {
   const { t } = useLang();
+  const canEdit = useCanEdit();
   const [name, setName] = useState(task.name);
   const [assignee, setAssignee] = useState(task.assignee ?? "");
   const [startDate, setStartDate] = useState(task.start_date ?? "");
@@ -35,6 +37,7 @@ export default function TaskFormModal({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canEdit) return;
     setError(null);
     if (!name.trim()) {
       setError(t("errTaskRequired"));
@@ -77,8 +80,13 @@ export default function TaskFormModal({
         onClick={(e) => e.stopPropagation()}
         className="card w-full max-w-lg p-6 shadow-xl"
       >
-        <h2 className="text-lg font-semibold">{t("formTitleEditTask")}</h2>
+        <h2 className="text-lg font-semibold">
+          {t(canEdit ? "formTitleEditTask" : "formTitleViewTask")}
+        </h2>
 
+        {/* Several panels show a task's note only here, so guests still get this
+            form, with every field locked. */}
+        <fieldset disabled={!canEdit} className="contents">
         <label className="mt-4 block text-sm">
           <span className="text-ink-2">{t("fieldTaskName")}</span>
           <input
@@ -147,6 +155,7 @@ export default function TaskFormModal({
             onChange={(e) => setNote(e.target.value)}
           />
         </label>
+        </fieldset>
 
         {error && (
           <p className="mt-3 text-sm text-[var(--status-critical)]">{error}</p>
@@ -154,11 +163,13 @@ export default function TaskFormModal({
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" className="btn" onClick={onClose}>
-            {t("cancel")}
+            {t(canEdit ? "cancel" : "close")}
           </button>
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? t("saving") : t("saveChanges")}
-          </button>
+          {canEdit && (
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? t("saving") : t("saveChanges")}
+            </button>
+          )}
         </div>
       </form>
     </div>

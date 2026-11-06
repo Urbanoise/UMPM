@@ -16,6 +16,7 @@ import {
   withDeliverableDate,
   withTaskChange,
 } from "@/lib/workItems";
+import { useCanEdit } from "@/lib/access";
 import { useLang } from "@/lib/i18n";
 import { fit } from "@/lib/exportGantt";
 import {
@@ -140,6 +141,7 @@ export default function Gantt({
   onMoveDeliverable: (milestone: Milestone, date: string) => void;
 }) {
   const { t, locale } = useLang();
+  const canEdit = useCanEdit();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(960);
   const [tip, setTip] = useState<Tip | null>(null);
@@ -306,7 +308,7 @@ export default function Gantt({
     fallback: string
   ) {
     if (bar) return;
-    const zone = zoneAt(e, x0, x1);
+    const zone = canEdit ? zoneAt(e, x0, x1) : null;
     (e.currentTarget as SVGElement).style.cursor =
       zone === "move" ? "grab" : zone ? "ew-resize" : fallback;
   }
@@ -314,7 +316,7 @@ export default function Gantt({
   // Touch keeps meaning tap and scroll; bars are dragged with a mouse or pen.
   function beginBar(e: React.PointerEvent, target: BarTarget, mode: BarMode | null) {
     dragged.current = false;
-    if (!mode || e.pointerType === "touch" || e.button !== 0) return;
+    if (!canEdit || !mode || e.pointerType === "touch" || e.button !== 0) return;
     e.preventDefault();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     setBar({ target, mode, startX: e.clientX, days: 0 });
@@ -562,7 +564,7 @@ export default function Gantt({
       <circle
         r={13}
         fill="transparent"
-        style={{ cursor: bar ? "grabbing" : "grab" }}
+        style={{ cursor: !canEdit ? "pointer" : bar ? "grabbing" : "grab" }}
         onClick={() => {
           if (selects && !dragged.current) onSelect(p.id);
           dragged.current = false;
@@ -841,7 +843,8 @@ export default function Gantt({
               />
 
               {/* drag handle — reorder projects freely */}
-              <g
+              {canEdit && (
+<g
                 transform={`translate(10, ${yMid})`}
                 style={{ cursor: drag ? "grabbing" : "grab" }}
                 role="button"
@@ -859,6 +862,7 @@ export default function Gantt({
                   </g>
                 ))}
               </g>
+)}
 
               {/* milestones */}
               {p.milestones.map((m) => {

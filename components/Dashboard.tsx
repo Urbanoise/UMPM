@@ -8,6 +8,7 @@ import type {
   TaskCategory,
   TaskStatus,
 } from "@/lib/types";
+import { CanEditContext } from "@/lib/access";
 import { useLang, type Lang, type StrKey } from "@/lib/i18n";
 import { applyTheme, useTheme, type ThemeChoice } from "@/lib/theme";
 import { splitAssignees } from "@/lib/assignees";
@@ -210,6 +211,40 @@ export default function Dashboard() {
   const [saveFailed, setSaveFailed] = useState(false);
   const [undoNotice, setUndoNotice] = useState<string | null>(null);
   const [canStep, setCanStep] = useState({ undo: false, redo: false });
+  // Null is a guest, which is also what the page shows until this is known.
+  const [pmEmail, setPmEmail] = useState<string | null>(null);
+  const canEdit = pmEmail !== null;
+
+  const loadSession = useCallback(
+    () =>
+      fetch("/api/auth/me")
+        .then((res) => (res.ok ? res.json() : { email: null }))
+        .then((data) => setPmEmail(data.email))
+        .catch(() => setPmEmail(null)),
+    []
+  );
+
+  useEffect(() => {
+    const outcome = new URLSearchParams(window.location.search).get("signin");
+    loadSession().then(() => {
+      if (!outcome) return;
+      window.history.replaceState(null, "", "/");
+      setUndoNotice(
+        t(outcome === "denied" ? "signInDenied" : "signInFailed")
+      );
+    });
+  }, [loadSession, t]);
+
+  // A session can run out mid-edit. Dropping to the guest view shows why the save
+  // failed and offers the way back in.
+  useEffect(() => {
+    if (saveFailed) loadSession();
+  }, [saveFailed, loadSession]);
+
+  async function signOut() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    await loadSession();
+  }
 
   useEffect(() => {
     fetch("/api/people")
@@ -603,6 +638,7 @@ export default function Dashboard() {
   }
 
   return (
+    <CanEditContext.Provider value={canEdit}>
     <div className="mx-auto w-full max-w-[100rem] space-y-4 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -616,29 +652,31 @@ export default function Dashboard() {
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1" role="group">
-            <button
-              className="btn disabled:opacity-40"
-              disabled={!canStep.undo}
-              onClick={() => step("undo")}
-              aria-label={t("undo")}
-              title={`${t("undo")} (Ctrl+Z)`}
-            >
-              ↶
-            </button>
-            <button
-              className="btn disabled:opacity-40"
-              disabled={!canStep.redo}
-              onClick={() => step("redo")}
-              aria-label={t("redo")}
-              title={`${t("redo")} (Ctrl+Y)`}
-            >
-              ↷
-            </button>
-          </div>
+          {canEdit && (
+            <div className="flex gap-1" role="group">
+              <button
+                className="btn disabled:opacity-40"
+                disabled={!canStep.undo}
+                onClick={() => step("undo")}
+                aria-label={t("undo")}
+                title={`${t("undo")} (Ctrl+Z)`}
+              >
+                ↶
+              </button>
+              <button
+                className="btn disabled:opacity-40"
+                disabled={!canStep.redo}
+                onClick={() => step("redo")}
+                aria-label={t("redo")}
+                title={`${t("redo")} (Ctrl+Y)`}
+              >
+                ↷
+              </button>
+            </div>
+          )}
           <ThemeToggle />
           <LangToggle />
-          {outbox && outbox.items.length > 0 && (
+          {canEdit && outbox && outbox.items.length > 0 && (
             <button className="btn" onClick={() => setModal("outbox")}>
               {t("outboxButton", { n: String(outbox.items.length) })}
             </button>
@@ -648,9 +686,23 @@ export default function Dashboard() {
               {t("export")}
             </button>
           )}
-          <button className="btn btn-primary" onClick={() => setModal("create")}>
-            {t("newProject")}
-          </button>
+          {canEdit && (
+            <button
+              className="btn btn-primary"
+              onClick={() => setModal("create")}
+            >
+              {t("newProject")}
+            </button>
+          )}
+          {canEdit ? (
+            <button className="btn" title={pmEmail} onClick={signOut}>
+              {t("signOut")}
+            </button>
+          ) : (
+            <a className="btn" href="/api/auth/login">
+              {t("signIn")}
+            </a>
+          )}
         </div>
       </header>
 
@@ -659,9 +711,14 @@ export default function Dashboard() {
       {projects.length === 0 ? (
         <div className="card flex flex-col items-center gap-3 px-6 py-16 text-center">
           <p className="text-ink-2">{t("emptyState")}</p>
-          <button className="btn btn-primary" onClick={() => setModal("create")}>
-            {t("newProject")}
-          </button>
+          {canEdit && (
+            <button
+              className="btn btn-primary"
+              onClick={() => setModal("create")}
+            >
+              {t("newProject")}
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -689,7 +746,7 @@ export default function Dashboard() {
                   {t("showPastProjects")}
                 </label>
               )}
-              {view !== "gantt" && (
+              {canEdit && view !== "gantt" && (
                 <div className="ml-auto flex items-center gap-2">
                   <button
                     className="btn"
@@ -760,7 +817,9 @@ export default function Dashboard() {
             </div>
           ) : (
             view === "gantt" && (
-              <p className="px-1 text-sm text-ink-3">{t("hint")}</p>
+              <p className="px-1 text-sm text-ink-3">
+                {t(canEdit ? "hint" : "hintGuest")}
+              </p>
             )
           )}
 
@@ -905,5 +964,6 @@ export default function Dashboard() {
         />
       )}
     </div>
+    </CanEditContext.Provider>
   );
 }

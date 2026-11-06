@@ -31,7 +31,9 @@ query matches before running it.
 `DATABASE_URL` must be set — locally in `.env.local` (copy `.env.example`), on
 Vercel by the Neon integration. `ANTHROPIC_API_KEY` is needed only by the
 contract upload route, and `SMTP_USER`, `SMTP_PASS` and `CRON_SECRET` only by email
-notifications; everything else runs without them. `scripts/setup-db.mjs`
+notifications; everything else runs without them. `GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET`, `AUTH_SECRET` and `PM_EMAILS` are needed to sign in, and
+without them the site runs read-only. `scripts/setup-db.mjs`
 reads `.env.local` itself via `process.loadEnvFile`; Next.js loads it for the app.
 
 ## Architecture
@@ -130,6 +132,23 @@ shares the production database. `MAIL_TEST_TO` sends everything to one inbox and
 records nothing. `db:setup` marks existing assignments as already notified when it
 creates the table, in one transaction, so switching mail on sends no backlog.
 
+**Access.** Guests read everything without logging in; only project managers sign
+in, with Google, and there is one role. `proxy.ts` is the only enforcement: it
+refuses every request that isn't a GET or HEAD unless it carries a valid session, so
+a new write route is covered automatically, but **a GET must never change anything**.
+The exceptions are signing out, and `/api/cron/notifications`, which is a GET behind
+its own bearer token. `lib/session.ts` holds the HMAC-signed cookie, so there is no
+session table, and fails closed without `AUTH_SECRET`. PMs are the `PM_EMAILS`
+variable, not a column or a constant: the repository is public, it needs no schema
+change, and it is read per request, so removing an address ends that session.
+`lib/googleAuth.ts` runs the OAuth code flow. There is deliberately no auth library:
+next-auth 5 is still in beta and doesn't accept this project's nodemailer version.
+
+In the client, `useCanEdit` (`lib/access.ts`) decides which controls to show. It
+defaults to false, and any new edit control must check it. That is presentation only.
+Guests keep `TaskFormModal` with its fields locked, because it is the only place
+several panels show a task's note.
+
 **i18n and theme** are both client-side `useSyncExternalStore` stores backed by
 `localStorage` with a custom window event to broadcast changes: `lib/i18n.tsx`
 (`lang` key, Georgian `ka` is the default, `en` second) and `lib/theme.ts`
@@ -227,8 +246,8 @@ tab and lost on reload.
 
 - `data/` is gitignored (holds `seed.json`, the old `timelines.db`) — nothing
   there is available to a fresh clone.
-- No authentication: anyone with the URL can read and edit. Deploys are on
-  Vercel from `main`.
+- Anyone with the URL can read everything (see Access). Deploys are on Vercel from
+  `main`.
 - Contract uploads are capped at 4 MB (`MAX_UPLOAD_BYTES`) because Vercel caps a
   serverless request body at ~4.5 MB, and the extract route sets
   `maxDuration = 300`, which Vercel clamps to 60s on a Hobby plan. Measured

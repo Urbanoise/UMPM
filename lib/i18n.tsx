@@ -7,6 +7,17 @@ export type Lang = "ka" | "en";
 const STRINGS = {
   appTitle: { ka: "პროექტების მართვა", en: "Project Management" },
   newProject: { ka: "+ ახალი პროექტი", en: "+ New project" },
+  signIn: { ka: "შესვლა", en: "Sign in" },
+  signOut: { ka: "გასვლა", en: "Sign out" },
+  signInDenied: {
+    ka: "ამ ანგარიშს რედაქტირების უფლება არ აქვს.",
+    en: "This account doesn't have editing access.",
+  },
+  signInFailed: {
+    ka: "შესვლა ვერ მოხერხდა. სცადეთ ხელახლა.",
+    en: "Sign-in failed. Please try again.",
+  },
+  close: { ka: "დახურვა", en: "Close" },
   loading: { ka: "იტვირთება…", en: "Loading…" },
 
   statProjects: { ka: "პროექტები", en: "Projects" },
@@ -24,6 +35,10 @@ const STRINGS = {
   emptyState: {
     ka: "პროექტები ჯერ არ არის. დაამატეთ პირველი პროექტი, რომ გამოჩნდეს განრიგზე.",
     en: "No projects yet. Add your first project to see it on the timeline.",
+  },
+  hintGuest: {
+    ka: "დააწკაპუნეთ პროექტზე განრიგში, რომ მისი თასქები და ჩასაბარებელი დოკუმენტები ნახოთ.",
+    en: "Click a project on the timeline to see its tasks and deliverables.",
   },
   hint: {
     ka: "დააწკაპუნეთ პროექტზე განრიგში, რომ მისი თასქები გამოჩნდეს განრიგზე და შეცვალოთ ჩასაბარებელი დოკუმენტები, თასქები და პასუხისმგებელი პირები.",
@@ -233,6 +248,7 @@ const STRINGS = {
   statusOf: { ka: "სტატუსი:", en: "Status of:" },
 
   formTitleEditTask: { ka: "თასქის რედაქტირება", en: "Edit task" },
+  formTitleViewTask: { ka: "თასქი", en: "Task" },
   fieldTaskName: { ka: "თასქის სახელი", en: "Task name" },
   fieldTaskNote: { ka: "შენიშვნა", en: "Note" },
   errTaskRequired: {

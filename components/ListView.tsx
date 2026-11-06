@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types";
 import { linkedTaskIds } from "@/lib/linked";
 import { fmtDate, todayStr } from "@/lib/dates";
+import { useCanEdit } from "@/lib/access";
 import { useLang, type StrKey } from "@/lib/i18n";
 import { statusColor, statusLabel, statusOrder } from "@/lib/taskStatus";
 import { seriesVar } from "@/lib/workItems";
@@ -64,6 +65,7 @@ export default function ListView({
   onEditTask: (task: Task) => void;
 }) {
   const { t, locale } = useLang();
+  const canEdit = useCanEdit();
   const today = todayStr();
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({
     key: "end",
@@ -265,9 +267,11 @@ export default function ListView({
                 return (
                   <tr
                     key={row.key}
-                    draggable
+                    draggable={canEdit}
                     data-list-row={row.key}
-                    className="cursor-grab border-b border-edge hover:bg-[var(--gridline)]/40 active:cursor-grabbing"
+                    className={`border-b border-edge hover:bg-[var(--gridline)]/40 ${
+                      canEdit ? "cursor-grab active:cursor-grabbing" : ""
+                    }`}
                     style={{ opacity: dragging?.key === row.key ? 0.5 : 1 }}
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = "move";
@@ -349,6 +353,7 @@ export default function ListView({
                       <select
                         className="px-1.5 py-0.5 text-[15px]"
                         value={row.status}
+                        disabled={!canEdit}
                         aria-label={`${t("statusOf")} ${row.name}`}
                         onChange={(e) =>
                           setStatus(row, e.target.value as TaskStatus)

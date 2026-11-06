@@ -5,6 +5,7 @@ import type { Project, Task, TaskCategory, TaskStatus } from "@/lib/types";
 import { statusLabel, statusOrder } from "@/lib/taskStatus";
 import { TASK_NAME_PRESETS } from "@/lib/presets";
 import { fmtDate, todayStr } from "@/lib/dates";
+import { useCanEdit } from "@/lib/access";
 import { useLang } from "@/lib/i18n";
 import { normalizeAssignees } from "@/lib/assignees";
 import type { TrackEdit } from "@/lib/undo";
@@ -50,6 +51,7 @@ export default function ProjectPanel({
   categories: TaskCategory[];
 }) {
   const { t, lang, locale } = useLang();
+  const canEdit = useCanEdit();
   const today = todayStr();
   const p = project;
   const doneTasks = p.tasks.filter((task) => task.status === "done").length;
@@ -191,19 +193,21 @@ export default function ProjectPanel({
             <p className="mt-2 max-w-2xl text-sm text-ink-2">{p.description}</p>
           )}
         </div>
-        <div className="flex gap-2">
-          {!fullyDone && (
-            <button className="btn btn-primary" onClick={completeProject}>
-              ✓ {t("markProjectDone")}
+        {canEdit && (
+          <div className="flex gap-2">
+            {!fullyDone && (
+              <button className="btn btn-primary" onClick={completeProject}>
+                ✓ {t("markProjectDone")}
+              </button>
+            )}
+            <button className="btn" onClick={onEdit}>
+              {t("edit")}
             </button>
-          )}
-          <button className="btn" onClick={onEdit}>
-            {t("edit")}
-          </button>
-          <button className="btn btn-danger" onClick={deleteProject}>
-            {t("delete")}
-          </button>
-        </div>
+            <button className="btn btn-danger" onClick={deleteProject}>
+              {t("delete")}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* progress meter */}
@@ -247,6 +251,7 @@ export default function ProjectPanel({
                   <input
                     type="checkbox"
                     checked={!!m.done}
+                    disabled={!canEdit}
                     onChange={async (e) => {
                       const done = e.target.checked;
                       await track(() =>
@@ -267,6 +272,7 @@ export default function ProjectPanel({
                       aria-label={`${t("deliverableTask")}: ${m.name}`}
                       title={t("deliverableTask")}
                       value={m.task_id ?? ""}
+                      disabled={!canEdit}
                       onChange={async (e) => {
                         const task_id = e.target.value
                           ? Number(e.target.value)
@@ -301,18 +307,20 @@ export default function ProjectPanel({
                     {overdue && "⚠ "}
                     {fmtDate(m.due_date, locale)}
                   </span>
-                  <button
-                    className="invisible text-ink-3 hover:text-[var(--status-critical)] group-hover:visible"
-                    aria-label={`${t("deleteMilestone")} ${m.name}`}
-                    onClick={async () => {
-                      await track(() =>
-                        api(`/api/milestones/${m.id}`, "DELETE")
-                      );
-                      onChanged();
-                    }}
-                  >
-                    ✕
-                  </button>
+                  {canEdit && (
+                    <button
+                      className="invisible text-ink-3 hover:text-[var(--status-critical)] group-hover:visible"
+                      aria-label={`${t("deleteMilestone")} ${m.name}`}
+                      onClick={async () => {
+                        await track(() =>
+                          api(`/api/milestones/${m.id}`, "DELETE")
+                        );
+                        onChanged();
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -322,6 +330,7 @@ export default function ProjectPanel({
               </li>
             )}
           </ul>
+          {canEdit && (
           <form onSubmit={addMilestone} className="mt-2 flex gap-2">
             <input
               className="flex-1 text-sm"
@@ -339,6 +348,7 @@ export default function ProjectPanel({
               {t("add")}
             </button>
           </form>
+          )}
         </section>
 
         {/* tasks */}
@@ -347,7 +357,7 @@ export default function ProjectPanel({
             <h3 className="text-sm font-semibold tracking-wide text-ink-2">
               {t("tasks")}
             </h3>
-            {p.tasks.length > 0 && (
+            {canEdit && p.tasks.length > 0 && (
               <label className="flex items-center gap-2 text-[16px] text-ink-3">
                 <input
                   type="checkbox"
@@ -366,7 +376,7 @@ export default function ProjectPanel({
             )}
           </div>
 
-          {selectedTasks.length > 0 && (
+          {canEdit && selectedTasks.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-edge px-2 py-1.5">
               <span className="text-[16px] font-medium">
                 {t("nSelected", { n: String(selectedTasks.length) })}
@@ -411,15 +421,18 @@ export default function ProjectPanel({
                   key={task.id}
                   className="group flex flex-wrap items-center gap-x-3 rounded-lg px-2 py-1.5 hover:bg-[var(--gridline)]/40"
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(task.id)}
-                    aria-label={`${t("selectTask")} ${task.name}`}
-                    onChange={(e) => toggleTask(task.id, e.target.checked)}
-                  />
+                  {canEdit && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(task.id)}
+                      aria-label={`${t("selectTask")} ${task.name}`}
+                      onChange={(e) => toggleTask(task.id, e.target.checked)}
+                    />
+                  )}
                   <select
                     className="px-1.5 py-0.5 text-[15px]"
                     value={task.status}
+                    disabled={!canEdit}
                     aria-label={`${t("statusOf")} ${task.name}`}
                     onChange={async (e) => {
                       const status = e.target.value as TaskStatus;
@@ -440,7 +453,7 @@ export default function ProjectPanel({
                     className={`flex-1 cursor-pointer text-left text-sm hover:underline ${
                       task.status === "done" ? "text-ink-3 line-through" : ""
                     }`}
-                    aria-label={`${t("edit")}: ${task.name}`}
+                    aria-label={canEdit ? `${t("edit")}: ${task.name}` : task.name}
                     onClick={() => onEditTask(task)}
                   >
                     {task.name}
@@ -465,18 +478,20 @@ export default function ProjectPanel({
                       – {task.end_date ? fmtDate(task.end_date, locale) : "…"}
                     </span>
                   )}
-                  <button
-                    className="invisible text-ink-3 hover:text-[var(--status-critical)] group-hover:visible"
-                    aria-label={`${t("deleteTask")} ${task.name}`}
-                    onClick={async () => {
-                      await track(() =>
-                        api(`/api/tasks/${task.id}`, "DELETE")
-                      );
-                      onChanged();
-                    }}
-                  >
-                    ✕
-                  </button>
+                  {canEdit && (
+                    <button
+                      className="invisible text-ink-3 hover:text-[var(--status-critical)] group-hover:visible"
+                      aria-label={`${t("deleteTask")} ${task.name}`}
+                      onClick={async () => {
+                        await track(() =>
+                          api(`/api/tasks/${task.id}`, "DELETE")
+                        );
+                        onChanged();
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
                   {/* Its own line: the dates leave the name column too narrow. */}
                   {task.note && (
                     <div className="basis-full pl-7">
@@ -490,6 +505,7 @@ export default function ProjectPanel({
               <li className="px-2 py-1 text-sm text-ink-3">{t("noTasks")}</li>
             )}
           </ul>
+          {canEdit && (
           <form onSubmit={addTask} className="mt-2 grid grid-cols-2 gap-2">
             {/* preset values follow the UI language */}
             <ComboBox
@@ -529,10 +545,11 @@ export default function ProjectPanel({
               </button>
             </div>
           </form>
+          )}
         </section>
       </div>
 
-      {bulkOpen && selectedTasks.length > 0 && (
+      {canEdit && bulkOpen && selectedTasks.length > 0 && (
         <BulkTaskModal
           tasks={selectedTasks}
           people={people}

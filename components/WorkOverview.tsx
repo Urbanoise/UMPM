@@ -4,6 +4,7 @@ import { ReactNode, useMemo, useRef, useState } from "react";
 import type { Project, Task } from "@/lib/types";
 import { PROJECT_STATUSES } from "@/lib/types";
 import { fmtShortDate, todayStr } from "@/lib/dates";
+import { useCanEdit } from "@/lib/access";
 import { useLang, type StrKey } from "@/lib/i18n";
 import { splitAssignees } from "@/lib/assignees";
 import { isStarted } from "@/lib/taskStatus";
@@ -95,6 +96,7 @@ export default function WorkOverview({
   onReassign: (task: Task, assignee: string) => void;
 }) {
   const { t, locale } = useLang();
+  const canEdit = useCanEdit();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [groupBy, setGroupBy] = useState<GroupBy>("person");
   const [showDone, setShowDone] = useState(true);
@@ -459,7 +461,7 @@ export default function WorkOverview({
                         {row.entries.map(({ task, project, seg }) => (
                           <li
                             key={task.id}
-                            draggable={groupBy === "person"}
+                            draggable={canEdit && groupBy === "person"}
                             style={{
                               opacity: dragging?.task.id === task.id ? 0.5 : 1,
                             }}
@@ -528,7 +530,11 @@ export default function WorkOverview({
               })}
             </ul>
             <p className="mt-2 px-1 text-xs text-ink-3">
-              {t(groupBy === "person" ? "overviewDragHint" : "overviewHint")}
+              {t(
+                canEdit && groupBy === "person"
+                  ? "overviewDragHint"
+                  : "overviewHint"
+              )}
             </p>
           </div>
         )}

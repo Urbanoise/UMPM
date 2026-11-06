@@ -109,3 +109,19 @@ Note there is no authentication: anyone with the URL can read and edit.
 - `components/ProjectFormModal.tsx` — create/edit project form
 - `lib/contract.ts` — the contract-reading prompt and its output schema
 - `components/ContractUploadModal.tsx` — upload, then review the extracted draft
+
+## Sign-in
+
+Anyone with the link can browse. Only project managers sign in, with Google, and
+only they can change anything or send email.
+
+1. In Google Cloud Console, from a Workspace account, create a project and set its
+   OAuth audience to **Internal**.
+2. Create a **Web application** client with these authorized redirect URIs:
+   `https://<site>/api/auth/callback/google` and
+   `http://localhost:3000/api/auth/callback/google`.
+3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SECRET` and `PM_EMAILS` in
+   Vercel, and in `.env.local` to sign in locally. Without them the site is read-only.
+
+To add or remove a project manager, edit `PM_EMAILS` in Vercel and redeploy. Real
+addresses never go in the repository, because it is public.
